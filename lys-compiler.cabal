@@ -26,7 +26,7 @@ library
 
 executable lys-compiler
   main-is:             Main.hs
-  other-modules:       Language.Lys.Core
+  other-modules:       Language.Lys.Inference
                      , Language.Lys.Pretty
                      , Language.Lys.Types
   -- other-extensions:

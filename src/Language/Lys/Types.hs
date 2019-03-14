@@ -3,22 +3,41 @@ module Language.Lys.Types where
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 
-type Fields = Map.Map String Type
+import Lens.Micro
+
 type Params = [(String, Type)]
 type Args   = [Name]
 type Label  = String
 
 data Type
     = IntT | FloatT | CharT | StringT
-    | ProdT Fields
-    | RecordT Type
-    | VariantT Type
-    | ExtendT Label Type Type
-    | EmptyT
+    | RecordT RecordType
     | QuoteT Session
     | IdentT String
     | VarT String
     deriving (Eq, Ord, Show)
+
+data RecordType
+    = SumRT Field RecordType
+    | ProdRT Field RecordType
+    | EmptyRT
+    | VarRT String
+    deriving (Eq, Ord, Show)
+    
+data Field = Field Label Type
+    deriving (Eq, Ord, Show)
+
+accumulateFields :: RecordType -> ([Field], Maybe String)
+accumulateFields (SumRT f r)  = accumulateFields r & _1 %~ (f:)
+accumulateFields (ProdRT f r) = accumulateFields r & _1 %~ (f:)
+accumulateFields EmptyRT      = ([], Nothing)
+accumulateFields (VarRT n)    = ([], Just n)
+
+mapFromRecordType :: RecordType -> (Map.Map Label Type, Maybe String)
+mapFromRecordType = (_1 %~ Map.fromList . map (\ (Field l t) -> (l, t))) . accumulateFields
+
+mapToRecordType :: (Field -> RecordType -> RecordType) -> Map.Map Label Type -> Maybe String -> RecordType
+mapToRecordType k fs ext = foldr (k . uncurry Field) (maybe EmptyRT VarRT ext) (Map.assocs fs)
 
 data Session
     = ReadS Name Session
@@ -46,10 +65,15 @@ data Process
 data Name
     = FieldN Name String
     | LitN Literal
-    | RecN [(String, Name)]
+    | RecN Record
     | CaseN Name String
     | QuoteN Process
     | VarN String
+    deriving (Eq, Ord, Show)
+
+data Record
+    = SumR Label Name
+    | ProdR [(Label, Name)]
     deriving (Eq, Ord, Show)
 
 data Literal
@@ -58,9 +82,3 @@ data Literal
     | CharL Char
     | StringL String
     deriving (Eq, Ord, Show)
-
-recordToList :: Type -> ([(Label, Type)], Maybe String)
-recordToList (VarT r)        = ([], Just r)
-recordToList EmptyT          = ([], Nothing)
-recordToList (ExtendT l t r) = let (ls, mv) = recordToList r
-                                in ((l, t):ls, mv)
