@@ -48,17 +48,22 @@ data Session
     | VarS String
     deriving (Eq, Ord, Show)
 
+accumulateSessions :: Session -> [Session]
+accumulateSessions NilS = []
+accumulateSessions (ParS s s') = accumulateSessions s ++ accumulateSessions s'
+accumulateSessions s = [s]
+
 data Process
     = InputP  Name String Process
     | OutputP Name Name
-    | NewP String Type Process
-    | NewPI String Process
+    | NewP String (Maybe Type) Process
     | ParP Process Process
-    | ProcP String Type Process
-    | ProcPI String Process
+    | SelectP Name [Process]
+    | ProcP String (Maybe Type) (Maybe Session) Process
     | CallP Process Name
     | VarP String
     | DropP Name
+    | AnnP Process Session
     | NilP
     deriving (Eq, Ord, Show)
 
@@ -73,7 +78,8 @@ data Name
 
 data Record
     = SumR Label Name
-    | ProdR [(Label, Name)]
+    | ProdR [(Label, Name)] (Maybe String)
+    | EmptyR
     deriving (Eq, Ord, Show)
 
 data Literal

@@ -43,28 +43,32 @@ instance PrettyShow RecordType where
 
 instance PrettyShow Process where
     prettyShow = \case
-        InputP x y p -> prettyShow x <> parens (text y) <> "," <+> prettyShow p
-        OutputP x y  -> prettyShow x <> brackets (prettyShow x)
-        NewP x t p   -> "new " <> text x <> ":" <+> prettyShow t <> braces (prettyShow p)
-        NewPI x p    -> "new " <> text x <+> braces (prettyShow p)
-        ParP p q     -> prettyShow p <+> "|" <+> prettyShow q
-        ProcP x t p  -> "proc" <> parens (text x <> ":" <+> prettyShow t) <+> "->" <+> prettyShow p
-        ProcPI x p   -> "proc" <> parens (text x) <+> "->" <+> prettyShow p
-        CallP p x    -> prettyShow p <+> prettyShow x
-        DropP x      -> "$" <> prettyShow x
-        VarP n       -> text n
-        NilP         -> "0"
+        InputP x y p      -> prettyShow x <> "?" <> parens (text y) <> "," <+> prettyShow p
+        OutputP x y       -> prettyShow x <> "!" <> parens (prettyShow x)
+        NewP x (Just t) p -> "new" <+> text x <> ":" <+> prettyShow t <> braces (prettyShow p)
+        NewP x Nothing p  -> "new" <+> text x <+> braces (prettyShow p)
+        ParP p q          -> prettyShow p <+> "|" <+> prettyShow q
+        SelectP x ps      -> "select" <+> prettyShow x <+> braces (cat (punctuate " | " (map prettyShow ps)))
+        CallP p x         -> prettyShow p <+> prettyShow x
+        DropP x           -> "$" <> prettyShow x
+        VarP n            -> text n
+        AnnP p s          -> parens (prettyShow p) <+> ":" <+> parens (prettyShow s)
+        NilP              -> "0"
+        ProcP x Nothing Nothing p   -> "proc" <> parens (text x) <+> braces (prettyShow p)
+        ProcP x (Just t) Nothing p  -> "proc" <> parens (text x <> ":" <+> prettyShow t) <+> braces (prettyShow p)
+        ProcP x Nothing (Just s) p  -> "proc" <> parens (text x) <+> "->" <+> prettyShow s <+> braces (prettyShow p)
+        ProcP x (Just t) (Just s) p -> "proc" <> parens (text x <> ":" <+> prettyShow t) <+> "->" <+> prettyShow s <+> braces (prettyShow p)
 
 instance PrettyShow Session where
     prettyShow = \case
-        ReadS x s   -> prettyShow x <> "?, " <> align (prettyShow s)
-        WriteS x    -> prettyShow x <> "!"
-        s@(ProcS{}) -> let (params, s')     = uncurrySession s
-                           showParam (x, t) = text x <> ":" <+> prettyShow t
-                       in "proc" <> tupled (map showParam params) <+> "->" <+> align (prettyShow s')
-        ParS s s'   -> prettyShow s <+> "|" <+> prettyShow s'
-        NilS        -> "0"
-        VarS n      -> text n
+        ReadS x s -> prettyShow x <> "?, " <> align (prettyShow s)
+        WriteS x  -> prettyShow x <> "!"
+        s@ProcS{} -> let (params, s')     = uncurrySession s
+                         showParam (x, t) = text x <> ":" <+> prettyShow t
+                     in "proc" <> tupled (map showParam params) <+> "->" <+> align (prettyShow s')
+        s@ParS{}  -> let ps = accumulateSessions s in cat (punctuate " | " (map prettyShow ps))
+        NilS      -> "0"
+        VarS n    -> text n
 
 uncurrySession :: Session -> ([(String, Type)], Session)
 uncurrySession (ProcS x t s) = ((x, t) : params, s')
@@ -82,7 +86,8 @@ instance PrettyShow Name where
 instance PrettyShow Record where
     prettyShow = \case
         SumR l x -> braces (string l <> ":" <+> prettyShow x)
-        ProdR fs -> braces . cat . punctuate comma $ map (\ (f, x) -> text f <> ":" <+> prettyShow x) fs
+        ProdR fs ext -> braces . cat . punctuate ", " $ map (\ (f, x) -> text f <> ":" <+> prettyShow x) fs ++ maybe [] (\ n -> [text n <> "..."]) ext
+        EmptyR -> "{}"
 
 instance PrettyShow Literal where
     prettyShow = \case
