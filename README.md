@@ -11,7 +11,7 @@ A concurrent programming language based on asynchronous π-calculus.
 |-------------------------	|---------------------------------------	|----------------------------------------	|-------------------------	|
 | `{f: x}` 	| Construct variant-object 	| `x : T` 	| `{f: T | ...}` 	|
 | `{f1: x1, ..., fn: xn}` 	| Construct record-object 	| `xi : Ti` 	| `{f1: T1, ..., fn: Tn}` 	|
-| `x.f` 	| Get the channel of `x` at field `f` 	| `x : {f : T, ...}` or `x : {f: T | ...}` 	| `T` 	|
+| `x.f` 	| Get the channel of `x` at field `f` 	| `x : {f : T, ...}` or `x : {f: T \| ...}` 	| `T` 	|
 | ``` `p` ``` 	| Quotes process `p` 	| `p : s` 	| ``` `s` ``` 	|
 
 #### Processes
