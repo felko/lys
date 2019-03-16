@@ -187,7 +187,7 @@ runInfer (Infer rse) ctx = runExcept (evalStateT (runReaderT rse ctx) defaultInf
 resolve :: Contextual k => String -> Infer (Scheme k)
 resolve n = Map.lookup n <$> view environment >>= \case
     Just t  -> pure t
-    Nothing -> throwError (InferError $ "Type variable" <+> backticks (text n) <+> "is not defined")
+    Nothing -> throwError (InferError $ "Kind variable" <+> backticks (text n) <+> "is not defined")
 
 lookupTypeName :: String -> Infer (Scheme Type)
 lookupTypeName n = Map.lookup n <$> view typeNames >>= \case
@@ -302,6 +302,7 @@ instance Kind Name where
         FieldN n _ -> freeVars n
         RecN r     -> freeVars r
         QuoteN p   -> mempty
+        LitN l     -> mempty
 
     substitute s@(Subst _ _ sn) (VarN n) = case Map.lookup n sn of
         Just n' -> n'
@@ -391,6 +392,7 @@ instance Inferable RecordType where
         r <- fresh @RecordType "r"
         (s2, rest) <- substituteGlobal s1 (infer (ProdR fs ext))
         pure (s2 <> s1, ProdRT (Field f t) rest)
+    infer EmptyR = pure (mempty, EmptyRT)
 
 unifyConstr :: (Field -> RecordType -> RecordType) -> RecordType -> RecordType -> Infer Subst
 unifyConstr constr r r' = case (ext, ext') of
@@ -399,24 +401,21 @@ unifyConstr constr r r' = case (ext, ext') of
         | otherwise -> err
     (Just extVar, Nothing) -> do
         s1 <- unifyFields fs inner' <|> err
-        fresh @RecordType "r" >>= \case
-            VarRT nExt' -> do
-                s2 <- bindVar extVar (RecordT $ mapToRecordType constr outer' (Just nExt'))
-                pure (s2 <> s1)
+        nExt' <- freshIdent RecordType' "r"
+        s2 <- bindVar extVar (RecordT $ mapToRecordType constr outer' (Just nExt'))
+        pure (s2 <> s1)
     (Nothing, Just extVar') -> do
         s1 <- unifyFields inner fs' <|> err
-        fresh @RecordType "r" >>= \case
-            VarRT nExt -> do
-                s2 <- bindVar extVar' (RecordT $ mapToRecordType constr outer (Just nExt))
-                pure (s2 <> s1)
+        nExt <- freshIdent RecordType' "r"
+        s2 <- bindVar extVar' (RecordT $ mapToRecordType constr outer (Just nExt))
+        pure (s2 <> s1)
     (Just extVar, Just extVar') -> do
         s1 <- unifyFields inner fs' <|> err
         s2 <- (unifyFields `on` substitute s1) fs inner' <|> err
-        (,) <$> fresh @RecordType "r" <*> fresh @RecordType "r" >>= \case
-            (VarRT nExt, VarRT nExt') -> do
-                s3 <- bindVar extVar (substitute (s2 <> s1) (RecordT $ mapToRecordType constr outer' (Just nExt')))
-                s4 <- bindVar extVar' (substitute (s3 <> s2 <> s1) (RecordT $ mapToRecordType constr outer (Just nExt)))
-                pure (s4 <> s3 <> s2 <> s1)
+        (nExt, nExt') <- (,) <$> freshIdent RecordType' "r" <*> freshIdent RecordType' "r"
+        s3 <- bindVar extVar (substitute (s2 <> s1) (RecordT $ mapToRecordType constr outer' (Just nExt')))
+        s4 <- bindVar extVar' (substitute (s3 <> s2 <> s1) (RecordT $ mapToRecordType constr outer (Just nExt)))
+        pure (s4 <> s3 <> s2 <> s1)
   where unifyFields x y = foldr (\ (t, t') ms -> ms >>= \ s -> unifyWithSubst s t t') (pure mempty) (Map.intersectionWith (,) x y)
         ((fs, ext), (fs', ext')) = ((,) `on` mapFromRecordType) r r'
         zipMap k x y     = Just (x, y)
@@ -438,24 +437,21 @@ substructConstr constr r r' = case (ext, ext') of
         | otherwise -> err
     (Just extVar, Nothing) -> do
         s1 <- substructFields fs inner' <|> err
-        fresh @RecordType "r" >>= \case
-            VarRT nExt' -> do
-                s2 <- bindVar extVar (RecordT $ mapToRecordType constr outer' (Just nExt'))
-                pure (s2 <> s1)
+        nExt' <- freshIdent RecordType' "r"
+        s2 <- bindVar extVar (RecordT $ mapToRecordType constr outer' (Just nExt'))
+        pure (s2 <> s1)
     (Nothing, Just extVar') -> do
         s1 <- substructFields inner fs' <|> err
-        fresh @RecordType "r" >>= \case
-            VarRT nExt -> do
-                s2 <- bindVar extVar' (RecordT $ mapToRecordType constr outer (Just nExt))
-                pure (s2 <> s1)
+        nExt <- freshIdent RecordType' "r"
+        s2 <- bindVar extVar' (RecordT $ mapToRecordType constr outer (Just nExt))
+        pure (s2 <> s1)
     (Just extVar, Just extVar') -> do
         s1 <- substructFields inner fs' <|> err
         s2 <- (substructFields `on` substitute s1) fs inner' <|> err
-        (,) <$> fresh @RecordType "r" <*> fresh @RecordType "r" >>= \case
-            (VarRT nExt, VarRT nExt') -> do
-                s3 <- bindVar extVar (substitute (s2 <> s1) (RecordT $ mapToRecordType constr outer' (Just nExt')))
-                s4 <- bindVar extVar' (substitute (s3 <> s2 <> s1) (RecordT $ mapToRecordType constr outer (Just nExt)))
-                pure (s4 <> s3 <> s2 <> s1)
+        (nExt, nExt') <- (,) <$> freshIdent RecordType' "r" <*> freshIdent RecordType' "r"
+        s3 <- bindVar extVar (substitute (s2 <> s1) (RecordT $ mapToRecordType constr outer' (Just nExt')))
+        s4 <- bindVar extVar' (substitute (s3 <> s2 <> s1) (RecordT $ mapToRecordType constr outer (Just nExt)))
+        pure (s4 <> s3 <> s2 <> s1)
   where substructFields x y = foldr (\ (t, t') ms -> ms >>= \ s -> substructWithSubst s t t') (pure mempty) (Map.intersectionWith (,) x y)
         ((fs, ext), (fs', ext')) = ((,) `on` mapFromRecordType) r r'
         zipMap k x y     = Just (x, y)
@@ -528,9 +524,6 @@ instance Kind Session where
     substitute s (ProcS x t r) = ProcS x (substitute s t) (substitute (removeSubst Name' x s) r)
     substitute s NilS          = NilS
 
-substituteNameInSession :: String -> Name -> Session -> Session
-substituteNameInSession x x' = substitute (Subst mempty mempty (Map.singleton x x'))
-
 instance Inferable Session where
     type Expr Session = Process
 
@@ -546,8 +539,8 @@ instance Inferable Session where
         | x `nameEq` x' = pure mempty
     unify (ProcS x t s) (ProcS x' t' s') = do
         s1 <- unify t t'
-        s2 <- unifyWithSubst s1 (substituteNameInSession x (VarN x') s) s'
-        pure (s1 <> removeSubst Name' x' s2)
+        s2 <- unifyWithSubst s1 (substitute (singleSubst x (VarN x')) s) s'
+        pure (s1 <> s2)
     unify NilS NilS = pure mempty
     unify s@ParS{} s'@ParS{} =
         let ps = eventPairs s s'
@@ -589,21 +582,23 @@ instance Inferable Session where
         (s1, s') <- introduce x (Scheme mempty t) (infer p)
         s2 <- unifyWithSubst s1 s s'
         let subst = s2 <> s1
-        pure (subst, ProcS x (substitute subst t) s)
+        pure (subst, ProcS x (substitute subst t) (substitute subst s))
     infer (ProcP x (Just t) (Just s) p) = do
         (s1, s') <- introduce x (Scheme mempty t) (infer p)
         s2 <- unifyWithSubst s1 s s'
         pure (s2 <> s1, ProcS x t s)
     infer (CallP p a) = do
-        (s1, s) <- infer p
-        (s2, t) <- substituteGlobal s1 (infer a)
+        (s1, t) <- infer a
+        (s2, s) <- substituteGlobal s1 (infer p)
         x <- freshIdent Name' "$"
         r <- fresh @Session "s"
-        s3 <- unify (substitute (s2 <> s1) s) (ProcS x t r)
-        let subst = s3 <> s2 <> s1
-            ProcS x' _ _ = substitute subst s
-        traceShow (substitute subst r) $ pure ()
-        pure (subst, substitute subst r)
+        s3 <- unifyWithSubst (s2 <> s1) s (ProcS x t r)
+        let subst = singleSubst x a <> s3 <> s2 <> s1
+            r' = substitute subst r
+        pure . (subst,) $ if constantName a
+            then privatize a r'
+            else r'
+        -- throwError (InferError $ "Process" <+> backticks (prettyShow p) <+> "is not callable")
     infer (DropP x) = do
         (s1, t) <- infer x
         k <- fresh @Session "s"
@@ -615,19 +610,15 @@ instance Inferable Session where
         (s2, sq) <- substituteGlobal s1 (infer q)
         let s = s2 <> s1
         pure (s, (ParS `on` substitute s) sp sq)
-    infer (SelectP x []) = pure (mempty, ReadS x NilS)
-    infer (SelectP x (p:ps)) = do
-        (s1, t)  <- infer @Type x
-        (s2, s)  <- substituteGlobal s1 (infer p)
-        (s3, s') <- substituteGlobal (s2 <> s1) (infer (SelectP x ps))
+    infer (SelectP x ps) = do
+        ss <- replicateM (length ps) (fresh @Session "s")
+        -- (s1, ss) <- (_1 %~ fold) . unzip <$> mapM infer ps
+        (s1, ss') <- foldr (\ p m -> m >>= \ (sb, ss) -> (_1 %~ (sb <>)) . (_2 %~ (:ss)) <$> substituteGlobal sb (infer p)) (pure (mempty, [])) ps
+        -- let expected = ReadS x s
+        s2 <- foldr (\ (s, s') m -> m >>= \ sb -> (sb <>) <$> unifyWithSubst sb s s') (pure s1) (zip ss ss')
+        (s3, ks) <- exhaustiveRead x ss'
         let subst = s3 <> s2 <> s1
-        k <- fresh @Session "s"
-        k' <- fresh @Session "s"
-        s4 <- substructWithSubst subst s (ReadS x k)
-        s5 <- substructWithSubst (s4 <> subst) s' (ReadS x k')
-        s6 <- substructWithSubst (s5 <> s4 <> subst) k k'
-        let subst' = s6 <> s5 <> s4 <> subst
-        pure (subst', ReadS x (substitute subst' k'))
+        pure (subst, ReadS x (substitute subst (foldr ParS NilS ks)))
     infer (VarP n) = do
         sigma <- resolve n
         s <- instantiate sigma
@@ -638,10 +629,46 @@ instance Inferable Session where
         pure (s2 <> s1, s)
     infer NilP = pure (mempty, NilS)
 
+exhaustiveRead :: Name -> [Session] -> Infer (Subst, [Session])
+exhaustiveRead x ss = do
+    (s1, t) <- infer x
+    (s2, ifs) <- getInputFields x ss
+    let pats = generatePatterns x t
+        (unmatched, ss') = foldr (\ (p, k) (ms, ks) -> (Set.filter (not . flip isSubName p) ms, k:ks)) (pats, []) ifs
+    if Set.null unmatched
+        then pure (s2 <> s1, ss')
+        else throwError (InferError $ "Non exhaustive read when selecting name" <+> backticks (prettyShow x) <> ", missing" <+> cat (punctuate ", " (map (backticks . prettyShow) (Set.toList unmatched))))
+
+getInputFields :: Name -> [Session] -> Infer (Subst, Set.Set (Name, Session))
+getInputFields _ [] = pure (mempty, Set.empty)
+getInputFields x (s:ss) = do
+    k <- fresh @Session "s"
+    s1 <- substruct s (ReadS x k)
+    (s2, ifs) <- getInputFields x ss
+    let subst = s2 <> s1
+        (s', k') = ((,) `on` substitute subst) s k
+    pure . (subst,) $ case s' of
+        ReadS y k'' -> Set.singleton (y, k'')
+        _ -> Set.empty
+-- getInputFields (s:ss) = traceShow s $ getInputFields ss <> case s of
+--     ReadS y s -> do
+--         getInputFields ss
+--         Set.singleton (y, s)
+--     _         -> getInputFields ss
+
+generatePatterns :: Name -> Type -> Set.Set Name
+generatePatterns x = go mempty
+    where go acc = (acc <>) . \case
+              RecordT rt@SumRT{} ->
+                let (fs, ext) = mapFromRecordType rt
+                in  foldMap (\ (f, t) -> generatePatterns (FieldN x f) t) (Map.assocs fs)
+                    -- <> foldMap (Set.singleton x) ext
+              t -> Set.singleton x
+
 instance Substructural Session where
     substruct sess1 sess2 = case (sess1, sess2) of
         (ReadS x s, ReadS x' s')
-            | x' `isSubName` x -> substruct s s' <|> err s s' 
+            | x' `isSubName` x -> substruct s s' <|> err s s'
             | otherwise        -> err sess1 sess2
         (WriteS x, WriteS x')
             | x `isSubName` x' -> pure mempty
@@ -654,7 +681,7 @@ instance Substructural Session where
                 (map (uncurry substructPermutations) ps)
         (ProcS x t s, ProcS x' t' s') -> do
             s1 <- substruct t t'
-            s2 <- substructWithSubst s1 s (substituteNameInSession x' (VarN x) s') <|> err s s'
+            s2 <- substructWithSubst s1 s (substitute (singleSubst x' (VarN x)) s') <|> err s s'
             pure (removeSubst Name' x' s2 <> s1)
         (NilS, _) -> pure mempty
         _ -> unify sess1 sess2 <|> err sess1 sess2
@@ -692,6 +719,9 @@ inferLit StringL{} = StringT
 isSubName :: Name -> Name -> Bool
 x `isSubName` FieldN y f = x `isSubName` y
 x `isSubName` y = x == y
+
+constantName :: Name -> Bool
+constantName x = Set.null (freeVars x ^. freeNames)
 
 privatize :: Name -> Session -> Session
 privatize n (ReadS x s)

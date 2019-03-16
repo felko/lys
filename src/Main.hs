@@ -42,7 +42,7 @@ proc = ProcP "player" Nothing Nothing write100
 --                 (CallP (CallP (DropP (VarN "f")) (FieldN (VarN "mx") "just")) (FieldN (VarN "my") "just"))
 --                 (InputP (FieldN (VarN "mx") "nothing") "_" (OutputP (FieldN (VarN "my") "nothing") (RecN (ProdR []))))
 
-mapMaybe = (ProcP "f" Nothing Nothing (ProcP "mx" Nothing Nothing (ProcP "my" Nothing (Just s) p))) 
+mapMaybe = (ProcP "f" (Just (QuoteT (ProcS "x" (VarT "A") (ProcS "y" (VarT "B") (ReadS (VarN "x") (WriteS (VarN "y"))))))) Nothing (ProcP "mx" Nothing Nothing (ProcP "my" Nothing (Just s) p))) 
     where p = SelectP (VarN "mx")
                 [ InputP (FieldN (VarN "mx") "nothing") "_" (OutputP (FieldN (VarN "my") "nothing") (RecN (ProdR [] Nothing)))
                 , CallP (CallP (DropP (VarN "f")) (FieldN (VarN "mx") "just")) (FieldN (VarN "my") "just") ]
