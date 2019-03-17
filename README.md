@@ -30,6 +30,32 @@ A concurrent programming language based on asynchronous π-calculus.
 | `p(a)` 	| Calls a process `p` with argument `x` 	| `a : T, proc(x: T) -> s` 	| `s` 	|
 | `$x` 	| Executes a quoted process `x` 	| ``` x: `s` ``` 	| `s` 	|
 
+### Type system
+
+The type system is divided into two kinds: types (types of channels) and sessions (types of processes)
+
+#### Types
+
+A lys type can be either:
+- a type identifier `Int`, `Float`, `Bool`, `String`
+- a type variable `t`
+- a record
+    - a product type `{ f1: t1, ..., fn: tn }`
+    - a sum type `{ f1: t1 | ... | fn: tn }`
+- a quoted session (acts like a closure)
+
+It features (for now) row-polymorphism and polymorphic variants so records can be extended.
+
+#### Sessions
+
+A session the type a processes, it can depend on channels:
+- `proc(x: T) -> s`: expect an argument `x` of type `T` then behave like a process of session `s`
+- `x?, s`: read channel `x` then behave like `s`
+- `x!`: write on `x`
+- `0`: the unit session
+- `s | s'`: act as `s` and `s'` executed simultaneously
+- `s where t1, ..., tn: Type, s1, ..., sn: Session`: Session scheme
+
 ### Roadmap
 
 - [x] Type checking
