@@ -25,7 +25,7 @@ A concurrent programming language based on asynchronous π-calculus.
 | `new x: T in p` 	| Defines a new channel `x` of type `T` then runs `p` 	| `p : s` 	| `hide(x, s)` 	|
 | `select x { p1 \| ... \| pn }` 	| Pattern match on `x` by selecting a process among `p1`, ..., `pn` (must be exhaustive)	| `pi : x.fi?, s`	| `x?, s` 	|
 | `init x { p1 \| ... \| pn }` 	| Initializes `x` by writing on all of its fields in processes `p1`, ..., `pn` 	| `pi : x.fi!` | `x!` 	|
-| `match x y { p1 \| ... \| pn }` 	| Syntactic sugar for simultaneous `select x` and `init y` `x` | `pi : x.fi?, y.gi!` | `x?, y!` 	|
+| `match x y { p1 \| ... \| pn }` 	| Syntactic sugar for simultaneous `select x` and `init y` | `pi : x.fi?, y.gi!` | `x?, y!` 	|
 | `proc(x: T) -> s { p }` 	| A process `p` of session `s` parametrized by a channel `x` of type `T` 	| `p : s` 	| `proc(x: T) -> s` 	|
 | `p(a)` 	| Calls a process `p` with argument `x` 	| `a : T, proc(x: T) -> s` 	| `s` 	|
 | `$x` 	| Executes a quoted process `x` 	| ``` x: `s` ``` 	| `s` 	|
