@@ -43,6 +43,7 @@ data Session
     = ReadS Name Session
     | WriteS Name
     | ParS Session Session
+    -- | ChoiceS Session Session
     | ProcS String Type Session
     | NilS
     | VarS String
@@ -59,6 +60,8 @@ data Process
     | NewP String (Maybe Type) Process
     | ParP Process Process
     | SelectP Name [Process]
+    | InitP Name [Process]
+    | MatchP Name Name [Process]
     | ProcP String (Maybe Type) (Maybe Session) Process
     | CallP Process Name
     | VarP String

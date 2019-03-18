@@ -19,6 +19,7 @@ ctx = Context
         [ ("player", Scheme mempty (IdentT "Player"))
         , ("print", Scheme mempty StringT)
         ]
+    , _recordEnv = Map.fromList []
     , _sessionEnv = Map.fromList []
     , _nameBindings = Map.empty
     }
@@ -56,6 +57,6 @@ select = ProcP "m" Nothing Nothing p
                 , InputP (FieldN (VarN "m") "nothing") "_" NilP ]
 
 main :: IO ()
-main = case runInfer (inferProcess mapMaybe) ctx of
+main = case runInfer (inferProcess select) ctx of
     Left (InferError err) -> putDoc (err <> char '\n')
     Right s               -> prettyPrint s

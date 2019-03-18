@@ -36,9 +36,10 @@ import Data.Foldable (fold)
 import Data.Function (on)
 import Data.Proxy
 import Data.Maybe
-import Data.List (permutations)
+import Data.List (permutations, sortOn, groupBy)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import qualified Data.Tree as Tree
 
 import Lens.Micro
 import Lens.Micro.Mtl
@@ -59,12 +60,17 @@ data KindProxy :: * -> * where
 data FreeVars = FreeVars
     { _freeSessionVars :: Set.Set String
     , _freeTypeVars    :: Set.Set String
+    , _freeRecordVars  :: Set.Set String
     , _freeNames       :: Set.Set String }
     deriving (Show)
 makeLenses ''FreeVars
 
 (\\) :: FreeVars -> FreeVars -> FreeVars
-FreeVars sv1 tv1 fn1 \\ FreeVars sv2 tv2 fn2 = FreeVars (Set.difference sv1 sv2) (Set.difference tv1 tv2) (Set.difference fn1 fn2)
+FreeVars sv1 tv1 rv1 fn1 \\ FreeVars sv2 tv2 rv2 fn2 = FreeVars
+    (Set.difference sv1 sv2)
+    (Set.difference tv1 tv2)
+    (Set.difference rv1 rv2)
+    (Set.difference fn1 fn2)
 
 data Scheme k = Scheme
     { _boundVars  :: FreeVars
@@ -76,6 +82,7 @@ data Context = Context
     { _typeNames    :: Map.Map String (Scheme Type)
     , _nameBindings :: Map.Map String (Scheme Name)
     , _typeEnv      :: Map.Map String (Scheme Type)
+    , _recordEnv    :: Map.Map String (Scheme RecordType)
     , _sessionEnv   :: Map.Map String (Scheme Session) }
     deriving (Show)
 makeLenses ''Context
@@ -140,6 +147,7 @@ class Inferable k => Dual k where
 data Subst = Subst
     { _sessionSubst :: Map.Map String Session
     , _typeSubst    :: Map.Map String Type
+    , _recordSubst  :: Map.Map String RecordType
     , _nameSubst    :: Map.Map String Name }
     deriving (Show)
 makeLenses ''Subst
@@ -151,28 +159,29 @@ singletonFreeVar :: forall proxy k. Inferable k => proxy k -> String -> FreeVars
 singletonFreeVar p n = mempty & freeVarsSet p .~ Set.singleton n
 
 instance PrettyShow t => PrettyShow (Scheme t) where
-    prettyShow (Scheme (FreeVars sn tn fn) t)
-        | null sn && null tn             = prettyShow t
-        | null sn && not (null tn)       = prettyShow t <+> "where" <+> showVars tn "Type"
-        | not (null sn) && null tn       = prettyShow t <+> "where" <+> showVars sn "Session"
-        | not (null sn) && not (null tn) = prettyShow t <+> "where" <+> showVars sn "Session" <> "," <+> showVars tn "Type"
+    prettyShow (Scheme (FreeVars sn tn rn fn) t)
+        | null sn && null tn               = prettyShow t
+        | null sn && not (null (tn <> rn)) = prettyShow t <+> "where" <+> showVars (tn <> rn) "Type"
+        | not (null sn) && null tn         = prettyShow t <+> "where" <+> showVars sn "Session"
+        | not (null sn) && not (null tn)   = prettyShow t <+> "where" <+> showVars sn "Session" <> "," <+> showVars tn "Type"
         where showVars ns ks = cat ((punctuate ", ") (map text (Set.toList ns))) <> ":" <+> ks
 
 instance Semigroup Subst where
-    s@(Subst ss1 st1 sn1) <> Subst ss2 st2 sn2 = Subst
+    s@(Subst ss1 st1 sr1 sn1) <> Subst ss2 st2 sr2 sn2 = Subst
         { _sessionSubst = fmap (substitute s) ss2 <> ss1
         , _typeSubst    = fmap (substitute s) st2 <> st1
+        , _recordSubst  = fmap (substitute s) sr2 <> sr1
         , _nameSubst    = fmap (substitute s) sn2 <> sn1 }
 
 instance Monoid Subst where
-    mempty = Subst mempty mempty mempty
+    mempty = Subst mempty mempty mempty mempty
     mappend = (<>)
 
 instance Semigroup FreeVars where
-    FreeVars sv1 tv1 fn1 <> FreeVars sv2 tv2 fn2 = FreeVars (sv1 <> sv2) (tv1 <> tv2) (fn1 <> fn2)
+    FreeVars sv1 tv1 rv1 fn1 <> FreeVars sv2 tv2 rv2 fn2 = FreeVars (sv1 <> sv2) (tv1 <> tv2) (rv1 <> rv2) (fn1 <> fn2)
 
 instance Monoid FreeVars where
-    mempty = FreeVars mempty mempty mempty
+    mempty = FreeVars mempty mempty mempty mempty
     mappend = (<>)
 
 defaultInferState :: InferState
@@ -224,11 +233,12 @@ generalize t = do
     pure (Scheme (freeVars t \\ freeVars env) t)
 
 instantiate :: forall k. Kind k => Scheme k -> Infer k
-instantiate (Scheme (FreeVars sn tn fn) t) = do
+instantiate (Scheme (FreeVars sn tn rn fn) t) = do
     svs <- forM (Set.toList sn) $ \ n -> (n,) <$> fresh @Session n
     tvs <- forM (Set.toList tn) $ \ n -> (n,) <$> fresh @Type n
+    rvs <- forM (Set.toList rn) $ \ n -> (n,) <$> fresh @RecordType n
     fns <- forM (Set.toList fn) $ \ n -> (n,) <$> fresh @Name n
-    let s = Subst (Map.fromList svs) (Map.fromList tvs) (Map.fromList fns)
+    let s = Subst (Map.fromList svs) (Map.fromList tvs) (Map.fromList rvs) (Map.fromList fns)
     pure (substitute s t)
 
 bindVar :: forall k. (Eq k, PrettyShow k, Contextual k) => String -> k -> Infer Subst
@@ -248,6 +258,8 @@ instance Kind Process where
         NewP x mt p     -> (freeVars p \\ singletonFreeVar Name' x) <> foldMap freeVars mt
         ParP p q        -> freeVars p <> freeVars q
         SelectP x ps    -> freeVars x <> foldMap freeVars ps
+        InitP x ps      -> freeVars x <> foldMap freeVars ps
+        MatchP x y ps   -> freeVars x <> freeVars y <> foldMap freeVars ps
         ProcP x mt ms p -> (freeVars p \\ singletonFreeVar Name' x)
                         <> (foldMap freeVars ms \\ singletonFreeVar Name' x)
                         <> foldMap freeVars mt
@@ -257,17 +269,19 @@ instance Kind Process where
         AnnP p s        -> freeVars p <> freeVars s
         NilP            -> mempty
 
-    substitute s@(Subst ss st sn) = \case
+    substitute s@(Subst ss st sr sn) = \case
         InputP x y p    -> InputP (substitute s x) y (substitute (removeSubst Name' y s) p)
         OutputP x y     -> OutputP (substitute s x) (substitute s y)
         NewP x mt p     -> NewP x (substitute s <$> mt) (substitute (removeSubst Name' x s) p)
         ParP p q        -> (ParP `on` substitute s) p q
         SelectP x ps    -> SelectP (substitute s x) (substitute s <$> ps)
+        InitP x ps      -> InitP (substitute s x) (substitute s <$> ps)
+        MatchP x y ps   -> MatchP (substitute s x) (substitute s y) (substitute s <$> ps)
         ProcP x mt ms p -> ProcP x (substitute s' <$> mt) (substitute s' <$> ms) (substitute s' p)
             where s' = removeSubst Name' x s
         CallP p a       -> CallP (substitute s p) (substitute s a)
         VarP n          -> VarP n
-        DropP x         -> DropP (substitute (Subst ss st Map.empty) x)
+        DropP x         -> DropP (substitute (Subst ss st sr Map.empty) x)
         AnnP p k        -> AnnP (substitute s p) (substitute s k)
         NilP            -> NilP
 
@@ -277,7 +291,7 @@ instance Kind Record where
         ProdR fs ext -> foldMap freeVars (Compose fs) <> maybe mempty (singletonFreeVar RecordType') ext
         EmptyR       -> mempty
 
-    substitute s@(Subst _ st _) (ProdR fs ext) = ProdR (fmap (substitute s) <$> fs) ext
+    substitute s@(Subst _ st _ _) (ProdR fs ext) = ProdR (fmap (substitute s) <$> fs) ext
     substitute s (SumR l x) = SumR l (substitute s x)
     substitute s EmptyR = EmptyR
 
@@ -304,12 +318,12 @@ instance Kind Name where
         QuoteN p   -> mempty
         LitN l     -> mempty
 
-    substitute s@(Subst _ _ sn) (VarN n) = case Map.lookup n sn of
+    substitute s@(Subst _ _ _ sn) (VarN n) = case Map.lookup n sn of
         Just n' -> n'
         Nothing -> VarN n
     substitute s (FieldN x f) = FieldN (substitute s x) f
     substitute s (RecN r) = RecN (substitute s r)
-    substitute (Subst ss st _) (QuoteN p) = QuoteN (substitute (Subst ss st mempty) p)
+    substitute (Subst ss st sn _) (QuoteN p) = QuoteN (substitute (Subst ss st sn mempty) p)
     substitute _ x = x
 
 instance Inferable Name where
@@ -339,7 +353,7 @@ instance Kind Type where
         QuoteT s  -> freeVars s
         _         -> mempty
 
-    substitute s@(Subst _ st _) (VarT n) = case Map.lookup n st of
+    substitute s@(Subst _ st _ _) (VarT n) = case Map.lookup n st of
         Just t  -> t
         Nothing -> VarT n
     substitute s (RecordT r) = RecordT (substitute s r)
@@ -357,10 +371,10 @@ instance Kind RecordType where
         ProdRT f r -> freeVars f <> freeVars r
         SumRT f r  -> freeVars f <> freeVars r
 
-    substitute s@(Subst _ st _) = \case
-        VarRT n -> case Map.lookup n st of
-            Just (RecordT rt) -> substitute s rt
-            _                 -> VarRT n
+    substitute s@(Subst _ _ sr _) = \case
+        VarRT n -> case Map.lookup n sr of
+            Just rt -> rt
+            _       -> VarRT n
         SumRT f r  -> SumRT (substitute s f) (substitute s r)
         ProdRT f r -> ProdRT (substitute s f) (substitute s r)
         EmptyRT    -> EmptyRT
@@ -368,14 +382,14 @@ instance Kind RecordType where
 instance Inferable RecordType where
     type Expr RecordType = Record
 
-    freeVarsSet _ = freeTypeVars
+    freeVarsSet _ = freeRecordVars
     varSupply _   = typeVarSupply
     varConstr     = VarRT
 
     unify r r' = case (r, r') of
         (EmptyRT, EmptyRT) -> pure mempty
-        (VarRT n, t) -> bindVar n (RecordT t)
-        (t, VarRT n) -> bindVar n (RecordT t)
+        (VarRT n, t) -> bindVar n t
+        (t, VarRT n) -> bindVar n t
         (SumRT{}, SumRT{}) -> unifyConstr SumRT r r'
         (ProdRT{}, ProdRT{}) -> unifyConstr ProdRT r r'
         _ -> err
@@ -401,21 +415,21 @@ unifyConstr constr r r' = case (ext, ext') of
         | otherwise -> err
     (Just extVar, Nothing) -> do
         s1 <- unifyFields fs inner' <|> err
-        nExt' <- freshIdent RecordType' "r"
-        s2 <- bindVar extVar (RecordT $ mapToRecordType constr outer' (Just nExt'))
+        s2 <- bindVar extVar EmptyRT
         pure (s2 <> s1)
     (Nothing, Just extVar') -> do
         s1 <- unifyFields inner fs' <|> err
-        nExt <- freshIdent RecordType' "r"
-        s2 <- bindVar extVar' (RecordT $ mapToRecordType constr outer (Just nExt))
+        s2 <- bindVar extVar' EmptyRT
         pure (s2 <> s1)
     (Just extVar, Just extVar') -> do
-        s1 <- unifyFields inner fs' <|> err
-        s2 <- (unifyFields `on` substitute s1) fs inner' <|> err
+        s1 <- (<>) <$> unifyFields inner inner <*> unifyFields outer outer' <|> err
         (nExt, nExt') <- (,) <$> freshIdent RecordType' "r" <*> freshIdent RecordType' "r"
-        s3 <- bindVar extVar (substitute (s2 <> s1) (RecordT $ mapToRecordType constr outer' (Just nExt')))
-        s4 <- bindVar extVar' (substitute (s3 <> s2 <> s1) (RecordT $ mapToRecordType constr outer (Just nExt)))
-        pure (s4 <> s3 <> s2 <> s1)
+        s2 <- (<>) <$> bindVar extVar (substitute s1 (mapToRecordType constr outer' (Just nExt)))
+                   <*> bindVar extVar' (substitute s1 (mapToRecordType constr outer (Just nExt')))
+        s3 <- (<>) <$> bindVar extVar (substitute (s1 <> s2) (mapToRecordType constr outer' (Just extVar')))
+                   <*> bindVar extVar' (substitute (s2 <> s1) (mapToRecordType constr outer (Just extVar)))
+        pure (s3 <> s2 <> s1)
+
   where unifyFields x y = foldr (\ (t, t') ms -> ms >>= \ s -> unifyWithSubst s t t') (pure mempty) (Map.intersectionWith (,) x y)
         ((fs, ext), (fs', ext')) = ((,) `on` mapFromRecordType) r r'
         zipMap k x y     = Just (x, y)
@@ -430,6 +444,10 @@ instance Substructural RecordType where
         _ -> unify rt1 rt2
       where err = throwError (InferError $ "Record type" <+> backticks (prettyShow rt1) <+> "is not a sub-record of" <+> backticks (prettyShow rt2))
 
+instance Contextual RecordType where
+    environment = recordEnv
+    substEnv = recordSubst
+
 substructConstr :: (Field -> RecordType -> RecordType) -> RecordType -> RecordType -> Infer Subst
 substructConstr constr r r' = case (ext, ext') of
     (Nothing, Nothing)
@@ -437,21 +455,20 @@ substructConstr constr r r' = case (ext, ext') of
         | otherwise -> err
     (Just extVar, Nothing) -> do
         s1 <- substructFields fs inner' <|> err
-        nExt' <- freshIdent RecordType' "r"
-        s2 <- bindVar extVar (RecordT $ mapToRecordType constr outer' (Just nExt'))
+        s2 <- bindVar extVar EmptyRT
         pure (s2 <> s1)
     (Nothing, Just extVar') -> do
         s1 <- substructFields inner fs' <|> err
-        nExt <- freshIdent RecordType' "r"
-        s2 <- bindVar extVar' (RecordT $ mapToRecordType constr outer (Just nExt))
+        s2 <- bindVar extVar' EmptyRT
         pure (s2 <> s1)
     (Just extVar, Just extVar') -> do
-        s1 <- substructFields inner fs' <|> err
-        s2 <- (substructFields `on` substitute s1) fs inner' <|> err
+        s1 <- (<>) <$> substructFields inner inner <*> substructFields outer outer' <|> err
         (nExt, nExt') <- (,) <$> freshIdent RecordType' "r" <*> freshIdent RecordType' "r"
-        s3 <- bindVar extVar (substitute (s2 <> s1) (RecordT $ mapToRecordType constr outer' (Just nExt')))
-        s4 <- bindVar extVar' (substitute (s3 <> s2 <> s1) (RecordT $ mapToRecordType constr outer (Just nExt)))
-        pure (s4 <> s3 <> s2 <> s1)
+        s2 <- (<>) <$> bindVar extVar (substitute s1 (mapToRecordType constr outer' (Just nExt)))
+                    <*> bindVar extVar' (substitute s1 (mapToRecordType constr outer (Just nExt')))
+        s3 <- (<>) <$> bindVar extVar (substitute (s1 <> s2) (mapToRecordType constr outer' (Just extVar')))
+                    <*> bindVar extVar' (substitute (s2 <> s1) (mapToRecordType constr outer (Just extVar)))
+        pure (s3 <> s2 <> s1)
   where substructFields x y = foldr (\ (t, t') ms -> ms >>= \ s -> substructWithSubst s t t') (pure mempty) (Map.intersectionWith (,) x y)
         ((fs, ext), (fs', ext')) = ((,) `on` mapFromRecordType) r r'
         zipMap k x y     = Just (x, y)
@@ -515,7 +532,7 @@ instance Kind Session where
         ProcS n t s -> freeVars t <> (freeVars s \\ singletonFreeVar Name' n)
         NilS        -> mempty
 
-    substitute s@(Subst ss _ _) (VarS n) = case Map.lookup n ss of
+    substitute s@(Subst ss _ _ _) (VarS n) = case Map.lookup n ss of
         Just k  -> substitute s k
         Nothing -> VarS n
     substitute s (ReadS x r)   = ReadS (substitute s x) (substitute s r)
@@ -612,11 +629,11 @@ instance Inferable Session where
         pure (s, (ParS `on` substitute s) sp sq)
     infer (SelectP x ps) = do
         ss <- replicateM (length ps) (fresh @Session "s")
-        -- (s1, ss) <- (_1 %~ fold) . unzip <$> mapM infer ps
-        (s1, ss') <- foldr (\ p m -> m >>= \ (sb, ss) -> (_1 %~ (sb <>)) . (_2 %~ (:ss)) <$> substituteGlobal sb (infer p)) (pure (mempty, [])) ps
-        -- let expected = ReadS x s
+        let alg p m = m >>= \ (sb, ss) -> (_1 %~ (sb <>)) . (_2 %~ (:ss))
+                                      <$> substituteGlobal sb (infer p)
+        (s1, ss') <- foldr alg (pure (mempty, [])) ps
         s2 <- foldr (\ (s, s') m -> m >>= \ sb -> (sb <>) <$> unifyWithSubst sb s s') (pure s1) (zip ss ss')
-        (s3, ks) <- exhaustiveRead x ss'
+        (s3, ks) <- substituteGlobal (s2 <> s1) (exhaustiveRead x ss')
         let subst = s3 <> s2 <> s1
         pure (subst, ReadS x (substitute subst (foldr ParS NilS ks)))
     infer (VarP n) = do
@@ -631,39 +648,92 @@ instance Inferable Session where
 
 exhaustiveRead :: Name -> [Session] -> Infer (Subst, [Session])
 exhaustiveRead x ss = do
-    (s1, t) <- infer x
+    (s1, t) <- infer @Type x
     (s2, ifs) <- getInputFields x ss
-    let pats = generatePatterns x t
-        (unmatched, ss') = foldr (\ (p, k) (ms, ks) -> (Set.filter (not . flip isSubName p) ms, k:ks)) (pats, []) ifs
-    if Set.null unmatched
-        then pure (s2 <> s1, ss')
-        else throwError (InferError $ "Non exhaustive read when selecting name" <+> backticks (prettyShow x) <> ", missing" <+> cat (punctuate ", " (map (backticks . prettyShow) (Set.toList unmatched))))
+    let pats = generateInputPatterns x t
+        unmatched = foldr (\ (p,_,_) ms -> Set.filter (not . flip isSubName p) ms) pats ifs
+        unfold = \case
+            FieldN x f -> unfold x & _2 %~ (++[f])
+            x -> (x, [])
+    t' <- getSelectedType (Set.map (\ (x,t,_) -> (snd (unfold x), t)) ifs)
+    s3 <- unifyWithSubst (s2 <> s1) t (RecordT t')
+        <|> throwError (InferError $ "Non exhaustive read when selecting name" <+> backticks (prettyShow x) <> ", missing" <+> cat (punctuate ", " (map (backticks . prettyShow) (Set.toList unmatched))))
+    pure (s3 <> s2 <> s1, view _3 <$> Set.toList ifs)
 
-getInputFields :: Name -> [Session] -> Infer (Subst, Set.Set (Name, Session))
+exhaustiveWrite :: Name -> [Session] -> Infer Subst
+exhaustiveWrite x ss = do
+    (s1, t) <- infer x
+    (s2, ofs) <- getOutputFields x ss
+    let t' = getInitType (Set.map (view _1) ofs)
+        pats = generateOutputPatterns x t
+    s3 <- unifyWithSubst (s2 <> s1) t (RecordT t')
+    pure (s3 <> s2 <> s1)
+    -- throwError (InferError $ "Non exhaustive write when initializing name" <+> backticks (prettyShow x) <> ", missing" <+> cat (punctuate ", " (map (backticks . prettyShow) (Set.toList undefs))))
+
+getSelectedType :: Set.Set ([Label], Type) -> Infer RecordType
+getSelectedType ns = foldr alg EmptyRT <$> mapM associate ngs
+    where nss = sortOn fst (Set.toList ns)
+          ngs = groupBy (groupF `on` fst) nss
+
+          groupF [] _ = False
+          groupF _ [] = False
+          groupF (x:_) (y:_) = x == y
+
+          alg (l, t) = SumRT (Field l t)
+
+          associate [([f],t)] = pure (f, t)
+          associate ps@((f:_,_):_) = do
+            let fs = Set.fromList (map (_1 %~ tail) ps)
+            (f,) . RecordT <$> getSelectedType fs
+          associate _ = throwError (InferError $ "Cannot associate")
+
+getInitType :: Set.Set Name -> RecordType
+getInitType ns = undefined -- mapToRecordType ProdRT (Map.fromList (Set.toList ofs)) Nothing
+
+getInputFields :: Name -> [Session] -> Infer (Subst, Set.Set (Name, Type, Session))
 getInputFields _ [] = pure (mempty, Set.empty)
 getInputFields x (s:ss) = do
+    (s1, t) <- infer @Type x
     k <- fresh @Session "s"
-    s1 <- substruct s (ReadS x k)
-    (s2, ifs) <- getInputFields x ss
-    let subst = s2 <> s1
+    t' <- fresh @Type "f"
+    s2 <- substruct (substitute s1 s) (ReadS x k)
+    (s3, ifs) <- getInputFields x ss
+    let subst = s3 <> s2 <> s1
+        (s', k') = ((,) `on` substitute subst) s k
+    pure . (subst,) . mappend ifs $ case s' of
+        ReadS y k'' -> Set.singleton (y, substitute subst t', k'')
+        _ -> Set.empty
+
+getOutputFields :: Name -> [Session] -> Infer (Subst, Set.Set (Name, Type))
+getOutputFields _ [] = pure (mempty, Set.empty)
+getOutputFields x (s:ss) = do
+    (s1, t) <- infer x
+    k <- fresh @Session "s"
+    s2 <- substruct (substitute s1 s) (WriteS x)
+    (s3, ifs) <- getOutputFields x ss
+    let subst = s3 <> s2 <> s1
         (s', k') = ((,) `on` substitute subst) s k
     pure . (subst,) $ case s' of
-        ReadS y k'' -> Set.singleton (y, k'')
+        WriteS y -> Set.singleton (y, t)
         _ -> Set.empty
--- getInputFields (s:ss) = traceShow s $ getInputFields ss <> case s of
---     ReadS y s -> do
---         getInputFields ss
---         Set.singleton (y, s)
---     _         -> getInputFields ss
 
-generatePatterns :: Name -> Type -> Set.Set Name
-generatePatterns x = go mempty
+generateInputPatterns :: Name -> Type -> Set.Set Name
+generateInputPatterns x = go mempty
     where go acc = (acc <>) . \case
               RecordT rt@SumRT{} ->
                 let (fs, ext) = mapFromRecordType rt
-                in  foldMap (\ (f, t) -> generatePatterns (FieldN x f) t) (Map.assocs fs)
+                in  foldMap (\ (f, t) -> generateInputPatterns (FieldN x f) t) (Map.assocs fs)
                     -- <> foldMap (Set.singleton x) ext
               t -> Set.singleton x
+
+generateOutputPatterns :: Name -> Type -> Set.Set Name
+generateOutputPatterns x = go mempty
+    where go acc = (acc <>) . \case
+            RecordT rt@ProdRT{} ->
+                let (fs, ext) = mapFromRecordType rt
+                in  foldMap (\ (f, t) -> generateOutputPatterns (FieldN x f) t) (Map.assocs fs)
+                    -- <> foldMap (Set.singleton x) ext
+            t -> Set.singleton x
 
 instance Substructural Session where
     substruct sess1 sess2 = case (sess1, sess2) of
