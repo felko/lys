@@ -152,6 +152,40 @@ data Subst = Subst
     deriving (Show)
 makeLenses ''Subst
 
+{-
+data These a b = This a | That b | These a b
+
+{name: process} {name: continuation}
+{name: These process continuation}
+
+Lens' Name (These (Name, Process) Name)
+
+data Expr
+    = App Expr Expr
+    | If Expr Expr Expr
+
+data Stage = Parsing | Desugaring | TypeChecking
+
+data Expr (stage :: Stage) where
+    If :: Expr stage -> Expr stage -> Expr stage -> Expr 'Parsing
+    App :: Expr stage -> Expr stage -> Expr stage
+    ...
+
+data Rho a where
+    Lift :: Rho Name -> Rho Process -> Rho Process
+    Input :: Rho Name -> Rho Name -> Rho Process -> Rho Process
+
+RhoExpr = Fix Rho
+
+desugar :: Lens' (Expr Parsing) (Expr Desugaring)
+desugar = lens get set
+    where get (If b tr fl) = Case b [(TruePat, tr), (FalsePat, fl)]
+          set (If b tr fl) 
+
+if b then tr else fl = case b of {True -> tr; False -> fl}
+
+-}
+
 singleSubst :: forall k. Contextual k => String -> k -> Subst
 singleSubst s k = mempty & substEnv @k .~ Map.singleton s k
 
@@ -485,8 +519,30 @@ instance Inferable Type where
 
     unify (VarT u) t = bindVar u t
     unify t (VarT u) = bindVar u t
+    unify (AppT f t) (AppT g u) = do
+        (a, b) <- liftA2 (,) (freshIdent Name' "$") (freshIdent Name' "$")
+        (t', u') <- liftA2 (,) (fresh @Type "t") (fresh @Type "t")
+        s1 <- liftA2 (<>) (unify f (ConT a t')) (unify g (ConT b u'))
+        s2 <- (liftA2 (<>) `on` uncurry (unifyWithSubst s1)) (t, t') (u, u')
+        s3 <- unifyWithSubst (s2 <> s1) t' u'
+        pure (s3 <> s2 <> s1)
+    unify t (AppT g u) = do
+        b <- freshIdent Name' "$"
+        u' <- fresh @Type "t"
+        s1 <- unify g (ConT b u')
+        s2 <- unifyWithSubst s1 u u'
+        s3 <- unify t (substitute (s2 <> s1) u')
+        pure (s3 <> s2 <> s1)
+    unify (AppT f t) u = do
+        a <- freshIdent Name' "$"
+        t' <- fresh @Type "t"
+        s1 <- unify f (ConT a t')
+        s2 <- unifyWithSubst s1 t t'
+        s3 <- unify (substitute (s2 <> s1) t') u
+        pure (s3 <> s2 <> s1)
     unify (RecordT r) (RecordT r') = unify r r'
     unify (QuoteT s) (QuoteT s') = unify s s'
+    unify (ConT a t) (ConT b u) = removeSubst Type' b <$> unify t (substitute (singleSubst b (VarT a)) u)
     unify t t'
         | t == t'   = pure mempty 
         | otherwise = throwError (InferError $ "Types" <+> backticks (prettyShow t) <+> "and" <+> backticks (prettyShow t') <+> "do not unify")
@@ -514,8 +570,30 @@ instance Inferable Type where
 
 instance Substructural Type where
     substruct type1 type2 = case (type1, type2) of
+        (AppT f t, AppT g u) -> do
+            (a, b) <- liftA2 (,) (freshIdent Name' "$") (freshIdent Name' "$")
+            (t', u') <- liftA2 (,) (fresh @Type "t") (fresh @Type "t")
+            s1 <- liftA2 (<>) (substruct f (ConT a t')) (unify g (ConT b u'))
+            s2 <- (liftA2 (<>) `on` uncurry (substructWithSubst s1)) (t, t') (u, u')
+            s3 <- substruct (s2 <> s1) t' u'
+            pure (s3 <> s2 <> s1)
+        (t, AppT g u) -> do
+            b <- freshIdent Name' "$"
+            u' <- fresh @Type "t"
+            s1 <- substruct g (ConT b u')
+            s2 <- substructWithSubst s1 u u'
+            s3 <- substruct t (substitute (s2 <> s1) u')
+            pure (s3 <> s2 <> s1)
+        (AppT f t, u) -> do
+            a <- freshIdent Name' "$"
+            t' <- fresh @Type "t"
+            s1 <- substruct f (ConT a t')
+            s2 <- substructWithSubst s1 t t'
+            s3 <- substruct (substitute (s2 <> s1) t') u
+            pure (s3 <> s2 <> s1)
         (RecordT r, RecordT r') -> substruct r r'
         (QuoteT s, QuoteT s') -> substruct s s'
+        (ConT a t, ConT b u) -> removeSubst Type' b <$> substruct t (substitute (singleSubst b (VarT a)) u)
         _ -> unify type1 type2 <|> err
       where err = throwError (InferError $ "Type" <+> backticks (prettyShow type1) <+> "is not a sub-type of" <+> backticks (prettyShow type2))
 

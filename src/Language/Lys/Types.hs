@@ -1,93 +1,47 @@
+{-# LANGUAGE TemplateHaskell #-}
+
 module Language.Lys.Types where
 
-import qualified Data.Map as Map
-import qualified Data.Set as Set
+import Data.Deriving
 
-import Lens.Micro
+-- ≡≅⊗⊕⊥⊤⊢⊣⋁⋀∝∈∉⎜⊸⅋&ΔΓν
 
-type Params = [(String, Type)]
-type Args   = [Name]
-type Label  = String
-
-data Type
-    = IntT | FloatT | CharT | StringT
-    | RecordT RecordType
-    | QuoteT Session
-    | IdentT String
-    | VarT String
-    deriving (Eq, Ord, Show)
-
-data RecordType
-    = SumRT Field RecordType
-    | ProdRT Field RecordType
-    | EmptyRT
-    | VarRT String
-    deriving (Eq, Ord, Show)
-    
-data Field = Field Label Type
-    deriving (Eq, Ord, Show)
-
-accumulateFields :: RecordType -> ([Field], Maybe String)
-accumulateFields (SumRT f r)  = accumulateFields r & _1 %~ (f:)
-accumulateFields (ProdRT f r) = accumulateFields r & _1 %~ (f:)
-accumulateFields EmptyRT      = ([], Nothing)
-accumulateFields (VarRT n)    = ([], Just n)
-
-mapFromRecordType :: RecordType -> (Map.Map Label Type, Maybe String)
-mapFromRecordType = (_1 %~ Map.fromList . map (\ (Field l t) -> (l, t))) . accumulateFields
-
-mapToRecordType :: (Field -> RecordType -> RecordType) -> Map.Map Label Type -> Maybe String -> RecordType
-mapToRecordType k fs ext = foldr (k . uncurry Field) (maybe EmptyRT VarRT ext) (Map.assocs fs)
-
-data Session
-    = ReadS Name Session
-    | WriteS Name
-    | ParS Session Session
-    -- | ChoiceS Session Session
-    | ProcS String Type Session
-    | NilS
-    | VarS String
-    deriving (Eq, Ord, Show)
-
-accumulateSessions :: Session -> [Session]
-accumulateSessions NilS = []
-accumulateSessions (ParS s s') = accumulateSessions s ++ accumulateSessions s'
-accumulateSessions s = [s]
-
+-- | The core representation of processes
 data Process
-    = InputP  Name String Process
-    | OutputP Name Name
-    | NewP String (Maybe Type) Process
+    = NilP
     | ParP Process Process
-    | SelectP Name [Process]
-    | InitP Name [Process]
-    | MatchP Name Name [Process]
-    | ProcP String (Maybe Type) (Maybe Session) Process
-    | CallP Process Name
+    | NewP String Type Process
+    | OutputP Name Name Process
+    | InputP Name String Process
+    | ReplicateP Name String Process
+    | InjectP Name String Process
+    | CaseP Name [(String,Process)]
     | VarP String
-    | DropP Name
-    | AnnP Process Session
-    | NilP
-    deriving (Eq, Ord, Show)
+    | AppP String Name
+    | SourceP String String Process
+    deriving (Eq, Show)
 
 data Name
-    = FieldN Name String
+    = VarN String
     | LitN Literal
-    | RecN Record
-    | CaseN Name String
-    | QuoteN Process
-    | VarN String
-    deriving (Eq, Ord, Show)
-
-data Record
-    = SumR Label Name
-    | ProdR [(Label, Name)] (Maybe String)
-    | EmptyR
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Show)
 
 data Literal
-    = IntL Integer
-    | FloatL Float
-    | CharL Char
-    | StringL String
+    = IntL Int
+    deriving (Eq, Show)
+
+data Type
+    = TopT | BottomT
+    | OneT | ZeroT
+    | OfCourseT Type
+    | WhyNotT Type
+    | TensorT Type Type
+    | ParT Type Type
+    | PlusT Type Type
+    | WithT Type Type
+    | VarT String
+    | PrimT PrimType
+    deriving (Eq, Ord, Show)
+
+data PrimType = IntT
     deriving (Eq, Ord, Show)
