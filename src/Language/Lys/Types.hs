@@ -30,6 +30,8 @@ data Literal
     = IntL Int
     deriving (Eq, Show)
 
+-- type Fields = [(String, Type)]
+
 data Type
     = TopT | BottomT
     | OneT | ZeroT

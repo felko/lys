@@ -11,7 +11,6 @@
 
 module Language.Lys.TypeChecking.Process where
 
-import Language.Lys.TypeChecking.Match
 import Language.Lys.TypeChecking.Types
 import Language.Lys.Types
 
@@ -171,75 +170,84 @@ instance Unifiable Type Type where
         -- Failure
         (t, t') -> throwError (InferError $ "Unable to unify types" <+> string (show t) <+> "and" <+> string (show t'))
 
-rule :: Show a => String -> Infer a -> Infer a
-rule name i = trace name $ do
-    x <- i
-    traceShow x $ pure x
+rule :: (Show a, Show b) => Judgement b -> String -> Infer a -> Infer a
+rule (p :⊢ ctx) name i =
+    trace (replicate 30 '—')
+  . traceShow p
+  . traceShow ctx
+  . trace name
+  $ (i >>= \ x -> traceShow x $ pure x)
+        `catchError` \ e -> trace (name ++ ": " ++ show e) (throwError e)
 
+concatContexts :: Context -> Context -> Infer Context
+concatContexts ctx ctx' = undefined -- concat deltas, unify thetas
 
 instance Inferable Process where
     type TypeOf Process = Type
 
     infer j = (j & judged %~ normalForm) & \case
         -- (Tvar)
-        VarP n :⊢ ctx -> do
+        VarP n :⊢ ctx -> rule j "(Tvar)" $ do
             ctx' <- instantiate =<< lookupGamma n
-            rule "(Tvar)" $ pure (ctx <> ctx')
+            pure (ctx <> ctx')
 
         -- (Tapp)
-        AppP p n :⊢ ctx -> lookupGamma p >>= \case
+        AppP p n :⊢ ctx -> rule j "(Tapp)" $ lookupGamma p >>= \case
             Scheme _ [] _ -> throwError (InferError $ "Cannot apply name" <+> string (show n) <+> "on non-polymorphic process" <+> string p)
-            Scheme tv (m:nv) ctx' -> rule "(Tapp)" $ (ctx <>) <$> instantiate (Scheme tv nv (substitute1 m n ctx'))
+            Scheme tv (m:nv) ctx' -> (ctx <>) <$> instantiate (Scheme tv nv (substitute1 m n ctx'))
 
         -- (T1)
-        NilP :⊢ ctx -> rule "(T1)" $ pure ctx
+        NilP :⊢ ctx -> rule j "(T1)" $ pure mempty
 
         -- (T⅋)
-        InputP (VarN x) y p :⊢ ctx -> do
-            ctx' <- infer (p :⊢ ctx)
-            (a, b) <- (,) <$> lookupDeltaBottom y ctx' <*> lookupDeltaBottom x ctx'
-            rule "(T⅋)" $ pure (ctx' & delta %~ introduce x (ParT a b) . remove y)
+        InputP (VarN x) y p :⊢ ctx -> rule j "(T⅋)" $ do
+            ctx' <- infer (p :⊢ mempty)
+            (a, b) <- (,) <$> lookupDeltaBottom y ctx' <*> lookupDelta x ctx'
+            pure (ctx' & delta %~ introduce x (ParT a b) . remove y)
 
         -- (T⊗)
-        NewP y a (InputP (VarN x) y' (ParP p q)) :⊢ ctx | y == y' -> do
-            ctxp <- infer (p :⊢ ctx & delta %~ introduce y a)
-            ctxq <- infer (q :⊢ ctx)
+        NewP y a (InputP (VarN x) y' (ParP p q)) :⊢ ctx | y == y' -> rule j "(T⊗)" $ do
+            ctxp <- infer (p :⊢ mempty)
+            a' <- lookupDelta y ctxp
+            subst =<< unify a a'
+            ctxq <- infer (q :⊢ mempty)
             b <- lookupDeltaOne x ctxq
-            rule "(T⊗)" $ pure (Context (introduce x (TensorT a b) $ ctxp ^. delta <> ctxq ^. delta) (ctx ^. theta))
+            pure (ctxp <> ctxq & delta %~ introduce x (TensorT a b))
 
         -- (Tcut?)
-        NewP u a (ParP (ReplicateP (VarN u') y p) q) :⊢ ctx | u == u' -> do
+        NewP u a (ParP (ReplicateP (VarN u') y p) q) :⊢ ctx | u == u' -> rule j "(Tcut?)" $ do
             ctxp <- infer (p :⊢ ctx)
             a' <- lookupDelta y ctxp
             ctxq <- infer (q :⊢ ctx & theta %~ introduce u a)
             subst =<< unify (dual a) a'
-            rule "(Tcut?)" $ pure (ctxp <> ctxq)
+            pure (ctxp <> ctxq)
 
         -- (Tcut)
-        NewP x a (ParP p q) :⊢ ctx -> do
-            ctxp <- infer (p :⊢ ctx)
+        NewP x a (ParP p q) :⊢ ctx -> rule j "(Tcut)" $ do
+            ctxp <- infer (p :⊢ mempty)
             a' <- lookupDelta x ctxp
-            ctxq <- infer (q :⊢ ctx & delta %~ introduce x a)
+            ctxq <- infer (q :⊢ mempty)
             -- thetaEquiv ctxp ctxqs
             subst =<< unify (dual a) a'
-            rule "(Tcut)" $ pure (ctxp <> ctxq)
+            pure $ (ctxp & delta %~ remove x)
+                <> (ctxq & delta %~ remove x)
 
         -- (Tcopy) + (T⊗)
         NewP y a (OutputP (VarN u) (VarN y') p) :⊢ ctx | y == y' -> do
-            ctxp <- infer (p :⊢ ctx & delta %~ introduce y a)
+            ctxp <- infer (p :⊢ ctx)
             (<|>)
-                (do a' <- lookupTheta u ctxp
-                    subst =<< unify a a'
-                    rule "(Tcopy)" $ pure (ctx & theta %~ introduce u a))
-                (do a' <- lookupDeltaOne u ctxp
-                    subst =<< unify @Type a a'
-                    rule "(T⊗)" $ pure (ctx & delta %~ introduce u a))
+                (rule j "(Tcopy)" $ do a' <- lookupTheta u ctxp
+                                       subst =<< unify a a'
+                                       pure (ctx & theta %~ introduce u a))
+                (rule j "(T⊗)" $ do a' <- lookupDeltaOne u ctxp
+                                    subst =<< unify a a'
+                                    pure (ctx & delta %~ introduce u a))
 
         -- (T!)
-        ReplicateP (VarN x) y q :⊢ ctx -> do
+        ReplicateP (VarN x) y q :⊢ ctx -> rule j "(T!)" $ do
             ctxq <- infer (q :⊢ mempty)
             a <- lookupDelta y ctxq
-            rule "(T!)" $ pure $ (ctxq <> ctx & delta %~ introduce x (OfCourseT a) . remove y)
+            pure $ (ctxq <> ctx & delta %~ introduce x (OfCourseT a) . remove y)
 
         -- (T⊕1)
         
@@ -249,11 +257,11 @@ instance Inferable Process where
         -- (T&)
 
         -- (T?)
-        SourceP x u p :⊢ ctx -> do
+        SourceP x u p :⊢ ctx -> rule j "(T?)" $ do
             ctxp <- infer (p :⊢ mempty)
             a <- lookupTheta u ctxp
-            rule "(T?)" $ pure $ (ctxp & theta %~ remove u)
-                              <> (ctx & delta %~ introduce x (WhyNotT a))
+            pure $ (ctxp & theta %~ remove u)
+                <> (ctx & delta %~ introduce x (WhyNotT a))
 
         (p :⊢ ctx) -> throwError (InferError $ "Couldn't infer process" <+> string (show (j ^. judged)))
 

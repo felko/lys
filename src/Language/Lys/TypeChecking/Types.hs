@@ -7,7 +7,6 @@
   , GeneralizedNewtypeDeriving
   , BlockArguments
   , OverloadedStrings
-  , KindSignatures
   , GADTs
   , Rank2Types
   , UndecidableInstances
@@ -19,7 +18,7 @@ module Language.Lys.TypeChecking.Types where
 
 import Language.Lys.Types
 
-import Data.Maybe
+import Data.Maybe (catMaybes, fromMaybe)
 import Data.Foldable
 import Data.Functor.Identity
 import qualified Data.Map as Map
@@ -32,8 +31,6 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Except
 
-import Data.Maybe (catMaybes)
-
 import Text.PrettyPrint.ANSI.Leijen hiding ((<>), (<$>))
 
 import Lens.Micro
@@ -41,8 +38,9 @@ import Lens.Micro.Mtl
 import Lens.Micro.TH
 
 data KindProxy :: * -> * where
-    Type' :: KindProxy Type
-    Name' :: KindProxy Name
+    Type'    :: KindProxy Type
+    Name'    :: KindProxy Name
+    Process' :: KindProxy Process
 
 -- | A type that can contain free names that can be substituted
 class Contextual a c where
@@ -186,6 +184,7 @@ instance Contextual Type Type where
         PrimT t -> PrimT t
 
 newtype InferError = InferError Doc
+    deriving Show
 
 instance Semigroup InferError where
     (<>) = flip const
@@ -237,7 +236,7 @@ lookupDeltaOne x ctx = case Map.lookup x (ctx ^. delta) of
     Nothing -> pure OneT
 
 lookupGamma :: String -> Infer Scheme
-lookupGamma x = Map.lookup x <$> ask >>= \case
+lookupGamma x = asks (Map.lookup x) >>= \case
     Just ctx -> pure ctx
     Nothing  -> throwError (InferError $ "Process" <+> string x <+> "is not defined")
 
