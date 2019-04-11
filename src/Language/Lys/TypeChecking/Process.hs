@@ -28,8 +28,7 @@ import qualified Data.Map as Map
 
 import Text.PrettyPrint.ANSI.Leijen hiding ((<>), (<$>))
 
-import Lens.Micro
-import Lens.Micro.Mtl
+import Control.Lens hiding (Context)
 
 import Debug.Trace
 
@@ -59,7 +58,7 @@ normalForm = \case
     ParP (ParP p q) r -> ParP (normalForm p) (ParP (normalForm q) (normalForm r))
 
     -- (Sν|)
-    ParP p (NewP x t q) | x `Set.notMember` freeNames Name' p -> NewP x t (ParP (normalForm p) (normalForm q))
+    -- ParP p (NewP x t q) | x `Set.notMember` freeNames Name' p -> NewP x t (ParP (normalForm p) (normalForm q))
 
     NilP -> NilP
     ParP p q -> ParP (normalForm p) (normalForm q)
@@ -134,6 +133,8 @@ instance Contextual Process Process where
 
 instance Dual Type where
     dual = \case
+        DualT (DualT a) -> a
+        DualT a -> dual a
         ZeroT -> TopT
         TopT -> ZeroT
         OneT -> BottomT
@@ -144,9 +145,17 @@ instance Dual Type where
         ParT a b -> TensorT (dual a) (dual b)
         PlusT a b -> WithT (dual a) (dual b)
         WithT a b -> PlusT (dual a) (dual b)
+        PrimT t -> DualT (PrimT t)
+        VarT n -> DualT (VarT n)
 
 instance Unifiable Type Type where
     unify t t' = case (t, t') of
+        -- Dual
+        (DualT (DualT t), t') -> unify t t'
+        (DualT t, DualT t') -> unify t t'
+        (DualT t, t') -> unify t (dual t')
+        (t, DualT t') -> unify (dual t) t'
+
         -- Bindings
         (VarT n, t) -> pure (Subst (Map.singleton n t))
         (t, VarT n) -> pure (Subst (Map.singleton n t))
@@ -167,20 +176,29 @@ instance Unifiable Type Type where
         (WithT a b, WithT a' b') -> (<>) <$> unify a a' <*> unify b b'
         (PlusT a b, PlusT a' b') -> (<>) <$> unify a a' <*> unify b b'
 
+        -- Primitive types
+        (PrimT t, PrimT t') | t == t' -> pure mempty
+
         -- Failure
         (t, t') -> throwError (InferError $ "Unable to unify types" <+> string (show t) <+> "and" <+> string (show t'))
 
+instance Unifiable Context Type where
+    unify (Context d t) (Context d' t') = (<>) <$> unify d d' <*> unify t t'
+        
+unifyCtx :: Context -> Context -> Infer Context
+unifyCtx ctx ctx' = do
+    s <- unify @Context @Type ctx ctx'
+    pure (substitute @Context @Type s ctx)
+
 rule :: (Show a, Show b) => Judgement b -> String -> Infer a -> Infer a
-rule (p :⊢ ctx) name i =
-    trace (replicate 30 '—')
-  . traceShow p
-  . traceShow ctx
-  . trace name
-  $ (i >>= \ x -> traceShow x $ pure x)
+rule (p :⊢ ctx) name i = trace (name ++ " " ++ show p ++ "\n\t" ++ show ctx) $
+    (i >>= \ x -> trace ('/':name ++ " " ++ show x) $ pure x)
         `catchError` \ e -> trace (name ++ ": " ++ show e) (throwError e)
 
 concatContexts :: Context -> Context -> Infer Context
 concatContexts ctx ctx' = undefined -- concat deltas, unify thetas
+
+-- findCuts :: 
 
 instance Inferable Process where
     type TypeOf Process = Type
@@ -206,7 +224,7 @@ instance Inferable Process where
             pure (ctx' & delta %~ introduce x (ParT a b) . remove y)
 
         -- (T⊗)
-        NewP y a (InputP (VarN x) y' (ParP p q)) :⊢ ctx | y == y' -> rule j "(T⊗)" $ do
+        NewP y a (OutputP (VarN x) (VarN y') (ParP p q)) :⊢ ctx | y == y' -> rule j "(T⊗)" $ do
             ctxp <- infer (p :⊢ mempty)
             a' <- lookupDelta y ctxp
             subst =<< unify a a'
@@ -215,33 +233,30 @@ instance Inferable Process where
             pure (ctxp <> ctxq & delta %~ introduce x (TensorT a b))
 
         -- (Tcut?)
-        NewP u a (ParP (ReplicateP (VarN u') y p) q) :⊢ ctx | u == u' -> rule j "(Tcut?)" $ do
-            ctxp <- infer (p :⊢ ctx)
+        ContractP u y p q :⊢ ctx -> rule j "(Tcut?)" $ do
+            ctxp <- infer (p :⊢ ctx & delta .~ mempty)
             a' <- lookupDelta y ctxp
-            ctxq <- infer (q :⊢ ctx & theta %~ introduce u a)
-            subst =<< unify (dual a) a'
+            complete (ctxp & delta %~ remove y)
+            ctxq <- infer (q :⊢ ctx)
+            a <- lookupDelta y ctxq
+            s <- unify @Type @Type (dual a) a'
             pure (ctxp <> ctxq)
+
+        -- (Tcopy)
+        NewP y a (OutputP (VarN u) (VarN y') p) :⊢ ctx | y == y' -> rule j "(Tcopy)" $ do
+            ctxp <- infer (p :⊢ mempty)
+            unifyCtx ctx (ctxp & (delta %~ remove y))
 
         -- (Tcut)
         NewP x a (ParP p q) :⊢ ctx -> rule j "(Tcut)" $ do
             ctxp <- infer (p :⊢ mempty)
-            a' <- lookupDelta x ctxp
             ctxq <- infer (q :⊢ mempty)
-            -- thetaEquiv ctxp ctxqs
-            subst =<< unify (dual a) a'
-            pure $ (ctxp & delta %~ remove x)
-                <> (ctxq & delta %~ remove x)
-
-        -- (Tcopy) + (T⊗)
-        NewP y a (OutputP (VarN u) (VarN y') p) :⊢ ctx | y == y' -> do
-            ctxp <- infer (p :⊢ ctx)
-            (<|>)
-                (rule j "(Tcopy)" $ do a' <- lookupTheta u ctxp
-                                       subst =<< unify a a'
-                                       pure (ctx & theta %~ introduce u a))
-                (rule j "(T⊗)" $ do a' <- lookupDeltaOne u ctxp
-                                    subst =<< unify a a'
-                                    pure (ctx & delta %~ introduce u a))
+            s <- (unify @Context @Type `on` delta %~ remove x) ctxp ctxq
+            a' <- lookupDelta x ctxp
+            a <- lookupDelta x ctxq
+            s <- unify @Type @Type (dual a) a'
+            unifyCtx (ctxp & delta %~ remove x)
+                     (ctxq & delta %~ remove x)
 
         -- (T!)
         ReplicateP (VarN x) y q :⊢ ctx -> rule j "(T!)" $ do
@@ -261,7 +276,7 @@ instance Inferable Process where
             ctxp <- infer (p :⊢ mempty)
             a <- lookupTheta u ctxp
             pure $ (ctxp & theta %~ remove u)
-                <> (ctx & delta %~ introduce x (WhyNotT a))
+                <> (ctx  & delta %~ introduce x (WhyNotT a))
 
         (p :⊢ ctx) -> throwError (InferError $ "Couldn't infer process" <+> string (show (j ^. judged)))
 

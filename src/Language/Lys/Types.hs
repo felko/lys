@@ -19,6 +19,7 @@ data Process
     | VarP String
     | AppP String Name
     | SourceP String String Process
+    | ContractP String String Process Process
     deriving (Eq, Show)
 
 data Name
@@ -41,6 +42,7 @@ data Type
     | ParT Type Type
     | PlusT Type Type
     | WithT Type Type
+    | DualT Type
     | VarT String
     | PrimT PrimType
     deriving (Eq, Ord, Show)

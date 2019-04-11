@@ -3,8 +3,12 @@
   , FlexibleInstances
   , FlexibleContexts
   , ConstrainedClassMethods
+  , ConstraintKinds
   , TypeFamilies
+  , TypeApplications
+  , ScopedTypeVariables
   , GeneralizedNewtypeDeriving
+  , DeriveTraversable
   , BlockArguments
   , OverloadedStrings
   , GADTs
@@ -18,7 +22,13 @@ module Language.Lys.TypeChecking.Types where
 
 import Language.Lys.Types
 
+import Data.List (intercalate)
 import Data.Maybe (catMaybes, fromMaybe)
+import Data.These
+import Data.Align
+import Data.Align.Key
+import Data.Key hiding (zip)
+
 import Data.Foldable
 import Data.Functor.Identity
 import qualified Data.Map as Map
@@ -31,11 +41,9 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Except
 
-import Text.PrettyPrint.ANSI.Leijen hiding ((<>), (<$>))
+import Text.PrettyPrint.ANSI.Leijen hiding ((<>), (<$>), align)
 
-import Lens.Micro
-import Lens.Micro.Mtl
-import Lens.Micro.TH
+import Control.Lens hiding (Context)
 
 data KindProxy :: * -> * where
     Type'    :: KindProxy Type
@@ -46,6 +54,8 @@ data KindProxy :: * -> * where
 class Contextual a c where
     freeNames  :: proxy c -> a -> Set.Set String
     substitute :: Subst c -> a -> a
+
+type Substituable a = Contextual a a
 
 substitute1 :: Contextual a c => String -> c -> a -> a
 substitute1 x y = substitute (Subst (Map.singleton x y))
@@ -85,12 +95,27 @@ restrictMany ns (Subst s) = Subst (Map.withoutKeys s ns)
 singleton :: Ord a => a -> Set.Set a
 singleton = Set.singleton
 
+newtype Env a = Env (Map.Map String a)
+    deriving ( Semigroup, Monoid
+             , Semialign, Align, Keyed, AlignWithKey
+             , Functor, Foldable, Traversable)
+
+type instance Key Env = String
+
+instance Show a => Show (Env a) where
+    show (Env m)
+        | Map.null m = "•"
+        | otherwise  = intercalate ", " (map (\ (x, t) -> x <> ": " <> show t) (Map.assocs m))
+
 -- | The type that stores the intermediate type bindings for inference
 data Context = Context
-    { _delta :: Map.Map String Type  -- ^ The global, unrestricted environment
-    , _theta :: Map.Map String Type  -- ^ The environment under the linear constraints
-    } deriving Show
+    { _delta :: Env Type  -- ^ The global, unrestricted environment
+    , _theta :: Env Type  -- ^ The environment under the linear constraints
+    }
 makeLenses ''Context
+
+instance Show Context where
+    show (Context d t) = "∆ = " <> show d <> "; Θ = " <> show t
 
 instance Semigroup Context where
     Context delta1 theta1 <> Context delta2 theta2 = Context (delta1 <> delta2) (theta1 <> theta2)
@@ -98,13 +123,14 @@ instance Semigroup Context where
 instance Monoid Context where
     mempty = Context mempty mempty
 
--- | Alias for `Map.insert`
-introduce :: Ord k => k -> v -> Map.Map k v -> Map.Map k v
-introduce = Map.insert
+introduce :: String -> a -> Env a -> Env a
+introduce x t (Env m) = Env (Map.insert x t m)
 
--- | Alias for `Map.delete`
-remove :: Ord k => k -> Map.Map k v -> Map.Map k v
-remove = Map.delete
+remove :: String -> Env a -> Env a
+remove x (Env m) = Env (Map.delete x m)
+
+lookupEnv :: String -> Env a -> Maybe a
+lookupEnv x (Env m) = Map.lookup x m 
 
 data Scheme = Scheme
     { _schemeTypeVars :: [String]
@@ -127,9 +153,9 @@ instance Contextual Context Type where
                  . (theta %~ fmap (substitute s))
 
 instance Contextual Context Name where
-    freeNames p (Context d t) = Map.keysSet d <> Map.keysSet t
+    freeNames p (Context (Env d) (Env t)) = Map.keysSet d <> Map.keysSet t
     substitute (Subst s) (Context d t) = Context (substKeys d) (substKeys t)
-        where substKeys e = Map.fromList $ catMaybes
+        where substKeys (Env e) = Env . Map.fromList $ catMaybes
                 [ case Map.lookup x s of
                     Just (LitN l) -> Nothing
                     Just (VarN y) -> Just (y, t)
@@ -137,16 +163,12 @@ instance Contextual Context Name where
                 | (x, t) <- Map.toList e ]
 
 instance (Ord k, Contextual v c) => Contextual (Map.Map k v) c where
-    freeNames p = foldMap (freeNames p)
-    substitute s = fmap (substitute s)
+    freeNames = foldMap . freeNames
+    substitute = fmap . substitute
 
-instance Contextual (Map.Map String v) String where
-    freeNames _ = Map.keysSet
-    substitute (Subst s) m = Map.fromList
-        [ case Map.lookup x s of
-            Just y  -> (y, t)
-            Nothing -> (x, t)
-        | (x, t) <- Map.toList m ]
+instance Contextual a c => Contextual (Env a) c where
+    freeNames d e = foldMap (freeNames d) e
+    substitute = fmap . substitute
 
 instance Contextual Name Name where
     freeNames _ (VarN x) = singleton x
@@ -205,7 +227,7 @@ defaultInferState = InferState
     , _typeVarSupply = 0
     , _nameSupply = 0 }
 
-type Gamma = Map.Map String Scheme
+type Gamma = Env Scheme
 
 newtype Infer a = Infer
     { unInfer :: ReaderT Gamma (StateT InferState (Except InferError)) a }
@@ -219,24 +241,24 @@ runInfer (Infer m) gamma = runExcept (evalStateT (runReaderT m gamma) defaultInf
 
 
 lookupTheta, lookupDelta, lookupDeltaBottom, lookupDeltaOne :: String -> Context -> Infer Type
-lookupTheta x ctx = case Map.lookup x (ctx ^. theta) of
+lookupTheta x ctx = case lookupEnv x (ctx ^. theta) of
     Just t -> pure t
     Nothing -> throwError (InferError $ "Name" <+> string x <+> "is not in scope")
 
-lookupDelta x ctx = case Map.lookup x (ctx ^. delta) of
+lookupDelta x ctx = case lookupEnv x (ctx ^. delta) of
     Just t -> pure t
     Nothing -> throwError (InferError $ "Name" <+> string x <+> "is not in scope")
 
-lookupDeltaBottom x ctx = case Map.lookup x (ctx ^. delta) of
+lookupDeltaBottom x ctx = case lookupEnv x (ctx ^. delta) of
     Just t -> pure t
     Nothing -> pure BottomT
 
-lookupDeltaOne x ctx = case Map.lookup x (ctx ^. delta) of
+lookupDeltaOne x ctx = case lookupEnv x (ctx ^. delta) of
     Just t -> pure t
     Nothing -> pure OneT
 
 lookupGamma :: String -> Infer Scheme
-lookupGamma x = asks (Map.lookup x) >>= \case
+lookupGamma x = asks (lookupEnv x) >>= \case
     Just ctx -> pure ctx
     Nothing  -> throwError (InferError $ "Process" <+> string x <+> "is not defined")
 
@@ -263,11 +285,23 @@ freshName prefix = do
 subst :: Subst Type -> Infer ()
 subst = modifying currentSubst . (<>)
 
-class Contextual a c => Unifiable a c where
+class Substituable c => Unifiable a c where
     unify :: a -> a -> Infer (Subst c)
 
-instance Unifiable Context Name where
-    unify = undefined
+instance Unifiable a a => Unifiable (Env a) a where
+    unify e e' = fold <$> sequence (alignWithKey f e e')
+        where f k = these (const (pure mempty)) (const (pure mempty)) unify
+
+unifyEnv :: forall a. Unifiable a a => Env a -> Env a -> Infer (Env a)
+unifyEnv e e' = sequence (alignWithKey f e e')
+    where f k = these pure pure \ t t' -> do
+                s <- unify @a @a t t'
+                pure (substitute s t)
+
+complete :: Context -> Infer ()
+complete (Context (Env d) _)
+    | Map.null d = pure ()
+    | otherwise  = throwError (InferError $ "Environment is not complete")
 
 infix 0 :⊢
 

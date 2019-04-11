@@ -41,6 +41,8 @@ packages:
 extra-deps:
 - recursion-schemes-ext-1.0.0.4
 - composition-prelude-2.0.4.0
+- these-0.8
+- assoc-1
 
 # Override default flag values for local packages and extra-deps
 # flags: {}
