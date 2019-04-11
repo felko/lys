@@ -2,6 +2,8 @@
 
 module Language.Lys.Types where
 
+import qualified Data.Map as Map
+
 import Data.Deriving
 
 -- ≡≅⊗⊕⊥⊤⊢⊣⋁⋀∝∈∉⎜⊸⅋&ΔΓν
@@ -31,7 +33,7 @@ data Literal
     = IntL Int
     deriving (Eq, Show)
 
--- type Fields = [(String, Type)]
+type Fields = Map.Map String Type
 
 data Type
     = TopT | BottomT
@@ -40,8 +42,8 @@ data Type
     | WhyNotT Type
     | TensorT Type Type
     | ParT Type Type
-    | PlusT Type Type
-    | WithT Type Type
+    | PlusT Fields
+    | WithT Fields
     | DualT Type
     | VarT String
     | PrimT PrimType

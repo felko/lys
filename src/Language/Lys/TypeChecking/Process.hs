@@ -143,8 +143,8 @@ instance Dual Type where
         WhyNotT t -> OfCourseT (dual t)
         TensorT a b -> ParT (dual a) (dual b)
         ParT a b -> TensorT (dual a) (dual b)
-        PlusT a b -> WithT (dual a) (dual b)
-        WithT a b -> PlusT (dual a) (dual b)
+        PlusT fs -> WithT (dual <$> fs)
+        WithT fs -> PlusT (dual <$> fs)
         PrimT t -> DualT (PrimT t)
         VarT n -> DualT (VarT n)
 
@@ -173,8 +173,8 @@ instance Unifiable Type Type where
         -- Connectives
         (TensorT a b, TensorT a' b') -> (<>) <$> unify a a' <*> unify b b'
         (ParT a b, ParT a' b') -> (<>) <$> unify a a' <*> unify b b'
-        (WithT a b, WithT a' b') -> (<>) <$> unify a a' <*> unify b b'
-        (PlusT a b, PlusT a' b') -> (<>) <$> unify a a' <*> unify b b'
+        (WithT fs, WithT fs') -> (unify `on` Env) fs fs'
+        (PlusT fs, PlusT fs') -> (unify `on` Env) fs fs'
 
         -- Primitive types
         (PrimT t, PrimT t') | t == t' -> pure mempty
@@ -264,12 +264,20 @@ instance Inferable Process where
             a <- lookupDelta y ctxq
             pure $ (ctxq <> ctx & delta %~ introduce x (OfCourseT a) . remove y)
 
-        -- (T⊕1)
-        
-
-        -- (T⊕2)
+        -- (T⊕)
+        InjectP (VarN x) l p :⊢ ctx -> rule j "(T⊕)" $ do
+            ctxp <- infer (p :⊢ mempty)
+            a <- lookupDelta x ctxp
+            pure (ctx <> ctxp & delta %~ introduce x (PlusT (Map.singleton l a)))
 
         -- (T&)
+        CaseP (VarN x) alts :⊢ ctx -> rule j "(T&)" do
+            (fs, ctxs) <- unzip <$> forM alts \ (l, p) -> do
+                ctxp <- infer (p :⊢ mempty)
+                a <- lookupDelta x ctxp
+                ctx' <- unifyCtx ctx (ctxp & delta %~ remove x)
+                pure ((l, a), ctx')
+            pure (mconcat ctxs & delta %~ introduce x (WithT (Map.fromList fs)))
 
         -- (T?)
         SourceP x u p :⊢ ctx -> rule j "(T?)" $ do

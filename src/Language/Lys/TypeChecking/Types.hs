@@ -186,8 +186,8 @@ instance Contextual Type Type where
         WhyNotT t -> freeNames p t
         TensorT a b -> freeNames p a <> freeNames p b
         ParT a b -> freeNames p a <> freeNames p b
-        PlusT a b -> freeNames p a <> freeNames p b
-        WithT a b -> freeNames p a <> freeNames p b
+        PlusT fs -> foldMap (freeNames p) fs
+        WithT fs -> foldMap (freeNames p) fs
         VarT n -> singleton n
         PrimT{} -> mempty
 
@@ -200,8 +200,8 @@ instance Contextual Type Type where
         WhyNotT t -> WhyNotT (substitute s t)
         TensorT a b -> TensorT (substitute s a) (substitute s b)
         ParT a b -> ParT (substitute s a) (substitute s b)
-        PlusT a b -> PlusT (substitute s a) (substitute s b)
-        WithT a b -> WithT (substitute s a) (substitute s b)
+        PlusT fs -> PlusT (substitute s <$> fs)
+        WithT fs -> WithT (substitute s <$> fs)
         VarT n -> fromMaybe (VarT n) (Map.lookup n m)
         PrimT t -> PrimT t
 
