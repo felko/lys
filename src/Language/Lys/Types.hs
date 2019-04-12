@@ -12,14 +12,13 @@ import Data.Deriving
 data Process
     = NilP
     | ParP Process Process
-    | NewP String Type Process
+    | NewP String (Maybe Type) Process
     | OutputP Name Name Process
     | InputP Name String Process
     | ReplicateP Name String Process
     | InjectP Name String Process
     | CaseP Name [(String,Process)]
-    | VarP String
-    | AppP String Name
+    | CallP String [Name]
     | SourceP String String Process
     | ContractP String String Process Process
     deriving (Eq, Show)
@@ -46,6 +45,8 @@ data Type
     | WithT Fields
     | DualT Type
     | VarT String
+    | IdentT String
+    -- | AppT Type [Type]
     | PrimT PrimType
     deriving (Eq, Ord, Show)
 

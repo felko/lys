@@ -75,7 +75,11 @@ class Dual a where
 
 newtype Subst a = Subst
     { fromSubst :: Map.Map String a }
-    deriving Show
+
+instance Show a => Show (Subst a) where
+    show (Subst m)
+        | Map.null m = "•"
+        | otherwise  = intercalate ", " (map (\ (x, t) -> x <> " -> " <> show t) (Map.assocs m))
 
 instance Contextual a a => Semigroup (Subst a) where
     Subst s <> Subst s' = Subst (Map.map (substitute (Subst s)) s' <> s)
@@ -95,12 +99,22 @@ restrictMany ns (Subst s) = Subst (Map.withoutKeys s ns)
 singleton :: Ord a => a -> Set.Set a
 singleton = Set.singleton
 
-newtype Env a = Env (Map.Map String a)
+newtype Env a = Env { _asMap :: Map.Map String a }
     deriving ( Semigroup, Monoid
              , Semialign, Align, Keyed, AlignWithKey
              , Functor, Foldable, Traversable)
 
 type instance Key Env = String
+type instance Index (Env a) = String
+type instance IxValue (Env a) = a
+
+makeLenses ''Env
+
+instance Ixed (Env a) where
+    ix k = asMap.ix k
+
+instance At (Env a) where
+    at k = asMap.at k
 
 instance Show a => Show (Env a) where
     show (Env m)
@@ -132,20 +146,19 @@ remove x (Env m) = Env (Map.delete x m)
 lookupEnv :: String -> Env a -> Maybe a
 lookupEnv x (Env m) = Map.lookup x m 
 
-data Scheme = Scheme
-    { _schemeTypeVars :: [String]
-    , _schemeNames    :: [String]
-    , _schemeCtx      :: Context }
-    deriving Show
+data Scheme a c = Scheme
+    { _schemeVars :: [String]
+    , _schemeVal  :: c }
+    deriving (Show, Functor)
 makeLenses ''Scheme
 
-instance Contextual Scheme Type where
-    freeNames p (Scheme tv _ ctx) = freeNames p ctx \\ Set.fromList tv
-    substitute s (Scheme tv nv ctx) = Scheme tv nv (substitute (restrictMany (Set.fromList tv) s) ctx)
+instance Contextual (Scheme Type Context) Name where
+    freeNames p (Scheme vs x) = freeNames p x \\ Set.fromList vs
+    substitute s (Scheme vs x) = Scheme vs (substitute (restrictMany (Set.fromList vs) s) x)
 
-instance Contextual Scheme Name where
-    freeNames p (Scheme tv nv ctx) = freeNames p ctx \\ Set.fromList nv
-    substitute s (Scheme tv nv ctx) = Scheme tv nv (substitute (restrictMany (Set.fromList nv) s) ctx)
+instance Contextual (Scheme Name Context) Type where
+    freeNames p (Scheme vs x) = freeNames p x \\ Set.fromList vs
+    substitute s (Scheme vs x) = Scheme vs (substitute (restrictMany (Set.fromList vs) s) x)
 
 instance Contextual Context Type where
     freeNames p (Context d t) = foldMap (freeNames p) d <> foldMap (freeNames p) t
@@ -203,6 +216,7 @@ instance Contextual Type Type where
         PlusT fs -> PlusT (substitute s <$> fs)
         WithT fs -> WithT (substitute s <$> fs)
         VarT n -> fromMaybe (VarT n) (Map.lookup n m)
+        IdentT n -> IdentT n
         PrimT t -> PrimT t
 
 newtype InferError = InferError Doc
@@ -217,33 +231,39 @@ instance Monoid InferError where
 data InferState = InferState
     { _currentSubst  :: Subst Type
     , _typeVarSupply :: Int
-    , _nameSupply    :: Int }
+    , _depth         :: Int }
     deriving Show
 makeLenses ''InferState
 
 defaultInferState :: InferState
 defaultInferState = InferState
-    { _currentSubst = Subst mempty
+    { _currentSubst  = Subst mempty
     , _typeVarSupply = 0
-    , _nameSupply = 0 }
+    , _depth         = 0 }
 
-type Gamma = Env Scheme
+type Gamma = Env (Scheme Type (Scheme Name Context))
+
+data InferEnv = InferEnv
+    { _gamma :: Gamma
+    , _tau   :: Env (Scheme Type Type) }
+    deriving (Show)
+makeLenses ''InferEnv
 
 newtype Infer a = Infer
-    { unInfer :: ReaderT Gamma (StateT InferState (Except InferError)) a }
+    { unInfer :: ReaderT InferEnv (StateT InferState (Except InferError)) a }
     deriving ( Functor, Applicative, Alternative, Monad
-             , MonadReader Gamma
+             , MonadReader InferEnv
              , MonadState InferState
              , MonadError InferError )
 
-runInfer :: Infer a -> Gamma -> Either InferError a
-runInfer (Infer m) gamma = runExcept (evalStateT (runReaderT m gamma) defaultInferState)
+runInfer :: Infer a -> InferEnv -> Either InferError a
+runInfer (Infer m) env = runExcept (evalStateT (runReaderT m env) defaultInferState)
 
 
 lookupTheta, lookupDelta, lookupDeltaBottom, lookupDeltaOne :: String -> Context -> Infer Type
 lookupTheta x ctx = case lookupEnv x (ctx ^. theta) of
     Just t -> pure t
-    Nothing -> throwError (InferError $ "Name" <+> string x <+> "is not in scope")
+    Nothing -> throwError (InferError $ "Unrestricted name" <+> string x <+> "is not in scope")
 
 lookupDelta x ctx = case lookupEnv x (ctx ^. delta) of
     Just t -> pure t
@@ -257,30 +277,35 @@ lookupDeltaOne x ctx = case lookupEnv x (ctx ^. delta) of
     Just t -> pure t
     Nothing -> pure OneT
 
-lookupGamma :: String -> Infer Scheme
-lookupGamma x = asks (lookupEnv x) >>= \case
+lookupGamma :: String -> Infer (Scheme Type (Scheme Name Context))
+lookupGamma p = asks (view $ gamma.at p) >>= \case
     Just ctx -> pure ctx
-    Nothing  -> throwError (InferError $ "Process" <+> string x <+> "is not defined")
+    Nothing  -> throwError (InferError $ "Process" <+> string p <+> "is not defined")
 
-instantiate :: Scheme -> Infer Context
-instantiate (Scheme tv nv ctx) = do
+lookupTau :: String -> Infer (Scheme Type Type)
+lookupTau n = asks (view $ tau.at n) >>= \case
+    Just t -> pure t
+    Nothing  -> throwError (InferError $ "Type" <+> string n <+> "is not defined")
+
+call :: Contextual c Name => [Name] -> Scheme Name c -> Infer c
+call ns (Scheme nv t) = do
+    let s = Subst (Map.fromList (zip nv ns))
+    pure (substitute s t)
+
+instantiate :: Contextual c Type => Scheme Type c -> Infer c
+instantiate (Scheme tv t) = do
     ts <- mapM freshType tv
-    ns <- mapM freshName nv
-    let st = Subst (Map.fromList (zip tv ts))
-        sn = Subst (Map.fromList (zip nv ns))
-    pure (substitute st . substitute sn $ ctx)
+    let s = Subst (Map.fromList (zip tv ts))
+    pure (substitute s t)
+
+instantiateCall :: [Name] -> Scheme Type (Scheme Name Context) -> Infer Context
+instantiateCall ns s = instantiate s >>= call ns
 
 freshType :: String -> Infer Type
 freshType prefix = do
     i <- use typeVarSupply
     typeVarSupply += 1
-    pure (VarT (prefix ++ show i))
-
-freshName :: String -> Infer Name
-freshName prefix = do
-    i <- use nameSupply
-    nameSupply += 1
-    pure (VarN (prefix ++ show i))
+    pure (VarT ('$':prefix ++ show i))
 
 subst :: Subst Type -> Infer ()
 subst = modifying currentSubst . (<>)

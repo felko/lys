@@ -67,8 +67,7 @@ normalForm = \case
     ReplicateP x y p -> ReplicateP x y (normalForm p)
     InjectP x f p -> InjectP x f (normalForm p)
     CaseP x ps -> CaseP x (fmap normalForm <$> ps)
-    VarP n -> VarP n
-    AppP p x -> AppP p x
+    CallP p xs -> CallP p xs
     SourceP x u p -> SourceP x u (normalForm p)
 
 instance Contextual Process Name where
@@ -81,8 +80,7 @@ instance Contextual Process Name where
         ReplicateP x y p -> freeNames d x <> (freeNames d p \\ singleton y)
         InjectP    x f p -> freeNames d x <> freeNames d p
         CaseP      x  ps -> freeNames d x <> foldMap (freeNames d) (Compose ps)
-        VarP           n -> mempty
-        AppP         p x -> freeNames d x
+        CallP      p  xs -> foldMap (freeNames d) xs
         SourceP    x u p -> singleton x <> singleton u <> freeNames d p
 
     substitute s@(Subst m) = \case
@@ -94,41 +92,11 @@ instance Contextual Process Name where
         ReplicateP x y p -> ReplicateP (substitute s x) y (substitute (restrict y s) p)
         InjectP    x f p -> InjectP (substitute s x) f (substitute s p)
         CaseP      x  ps -> CaseP (substitute s x) (fmap (substitute s) <$> ps)
-        VarP           n -> VarP n
-        AppP         p x -> AppP p (substitute s x)
+        CallP      p  xs -> CallP p (substitute s <$> xs)
         SourceP    x u p -> case Map.lookup x m of
             Just (VarN y) -> SourceP y u (substitute (restrict u s) p)
             Just y -> substitute1 u y p
             Nothing -> SourceP x u (substitute (restrict u s) p)
-
-instance Contextual Process Process where
-    freeNames d = \case
-        NilP             -> mempty
-        ParP         p q -> freeNames d p <> freeNames d q
-        NewP       x t p -> freeNames d p
-        OutputP    x y p -> freeNames d p
-        InputP     x y p -> freeNames d p
-        ReplicateP x y p -> freeNames d p
-        InjectP    x f p -> freeNames d p
-        CaseP      x  ps -> foldMap (freeNames d) (Compose ps)
-        VarP           n -> singleton n
-        AppP         p x -> singleton p
-        SourceP    x u p -> freeNames d p
-
-    substitute s@(Subst m) = \case
-        NilP             -> NilP
-        ParP         p q -> ParP (substitute s p) (substitute s q)
-        NewP       x t p -> NewP x t (substitute s p)
-        OutputP    x y p -> OutputP x y (substitute s p)
-        InputP     x y p -> InputP x y (substitute s p)
-        ReplicateP x y p -> ReplicateP x y (substitute s p)
-        InjectP    x f p -> InjectP x f (substitute s p)
-        CaseP      x  ps -> CaseP x (fmap (substitute s) <$> ps)
-        AppP         p x -> AppP p x
-        VarP           n -> case Map.lookup n m of
-            Just p -> p
-            _ -> VarP n
-        SourceP    x u p -> SourceP x u (substitute s p)
         
 
 instance Dual Type where
@@ -147,9 +115,10 @@ instance Dual Type where
         WithT fs -> PlusT (dual <$> fs)
         PrimT t -> DualT (PrimT t)
         VarT n -> DualT (VarT n)
+        IdentT n -> DualT (IdentT n)
 
 instance Unifiable Type Type where
-    unify t t' = case (t, t') of
+    unify t t' = unifying t t' $ case (t, t') of
         -- Dual
         (DualT (DualT t), t') -> unify t t'
         (DualT t, DualT t') -> unify t t'
@@ -159,6 +128,9 @@ instance Unifiable Type Type where
         -- Bindings
         (VarT n, t) -> pure (Subst (Map.singleton n t))
         (t, VarT n) -> pure (Subst (Map.singleton n t))
+        (IdentT n, IdentT n') | n == n' -> pure mempty
+        (IdentT n, t) -> flip unify t =<< instantiate =<< lookupTau n
+        (t, IdentT n) -> unify t =<< instantiate =<< lookupTau n
 
         -- Units
         (TopT, TopT) -> pure mempty
@@ -186,17 +158,24 @@ instance Unifiable Context Type where
     unify (Context d t) (Context d' t') = (<>) <$> unify d d' <*> unify t t'
         
 unifyCtx :: Context -> Context -> Infer Context
-unifyCtx ctx ctx' = do
-    s <- unify @Context @Type ctx ctx'
-    pure (substitute @Context @Type s ctx)
+unifyCtx (Context d t) (Context d' t') = Context <$> unifyEnv d d' <*> unifyEnv t t'
+
+indentDebug :: (String -> Infer a) -> Infer a
+indentDebug f = do
+    d <- use depth
+    depth += 1
+    r <- f (replicate d '\t')
+    depth -= 1
+    pure r
 
 rule :: (Show a, Show b) => Judgement b -> String -> Infer a -> Infer a
-rule (p :⊢ ctx) name i = trace (name ++ " " ++ show p ++ "\n\t" ++ show ctx) $
-    (i >>= \ x -> trace ('/':name ++ " " ++ show x) $ pure x)
-        `catchError` \ e -> trace (name ++ ": " ++ show e) (throwError e)
+rule (p :⊢ ctx) name i = indentDebug \ tab ->
+    trace (tab ++ name ++ " " ++ show p ++ "\n\t" ++ tab ++ show ctx) $
+        (i >>= \ x -> trace (tab ++ '/':name ++ " " ++ show x) $ pure x)
+            `catchError` \ e -> trace (name ++ ": " ++ show e) (throwError e)
 
-concatContexts :: Context -> Context -> Infer Context
-concatContexts ctx ctx' = undefined -- concat deltas, unify thetas
+unifying :: (Show a, Unifiable a a) => a -> a -> Infer (Subst a) -> Infer (Subst a)
+unifying t t' = indentDebug . flip \ tab -> trace (tab <> show t <> " ~ " <> show t')
 
 -- findCuts :: 
 
@@ -204,27 +183,22 @@ instance Inferable Process where
     type TypeOf Process = Type
 
     infer j = (j & judged %~ normalForm) & \case
-        -- (Tvar)
-        VarP n :⊢ ctx -> rule j "(Tvar)" $ do
-            ctx' <- instantiate =<< lookupGamma n
-            pure (ctx <> ctx')
-
-        -- (Tapp)
-        AppP p n :⊢ ctx -> rule j "(Tapp)" $ lookupGamma p >>= \case
-            Scheme _ [] _ -> throwError (InferError $ "Cannot apply name" <+> string (show n) <+> "on non-polymorphic process" <+> string p)
-            Scheme tv (m:nv) ctx' -> (ctx <>) <$> instantiate (Scheme tv nv (substitute1 m n ctx'))
+        -- (Tcall)
+        CallP p ns :⊢ ctx -> rule j "(Tcall)" do
+            (ctx <>) <$> (instantiateCall ns =<< lookupGamma p)
 
         -- (T1)
-        NilP :⊢ ctx -> rule j "(T1)" $ pure mempty
+        NilP :⊢ ctx -> rule j "(T1)" $ ctx <$ complete ctx
 
         -- (T⅋)
-        InputP (VarN x) y p :⊢ ctx -> rule j "(T⅋)" $ do
-            ctx' <- infer (p :⊢ mempty)
+        InputP (VarN x) y p :⊢ ctx -> rule j "(T⅋)" do
+            ctx' <- infer (p :⊢ ctx)
             (a, b) <- (,) <$> lookupDeltaBottom y ctx' <*> lookupDelta x ctx'
             pure (ctx' & delta %~ introduce x (ParT a b) . remove y)
 
         -- (T⊗)
-        NewP y a (OutputP (VarN x) (VarN y') (ParP p q)) :⊢ ctx | y == y' -> rule j "(T⊗)" $ do
+        NewP y ma (OutputP (VarN x) (VarN y') (ParP p q)) :⊢ ctx | y == y' -> rule j "(T⊗)" do
+            a <- maybe (freshType "A") pure ma
             ctxp <- infer (p :⊢ mempty)
             a' <- lookupDelta y ctxp
             subst =<< unify a a'
@@ -233,7 +207,7 @@ instance Inferable Process where
             pure (ctxp <> ctxq & delta %~ introduce x (TensorT a b))
 
         -- (Tcut?)
-        ContractP u y p q :⊢ ctx -> rule j "(Tcut?)" $ do
+        ContractP u y p q :⊢ ctx -> rule j "(Tcut?)" do
             ctxp <- infer (p :⊢ ctx & delta .~ mempty)
             a' <- lookupDelta y ctxp
             complete (ctxp & delta %~ remove y)
@@ -243,29 +217,27 @@ instance Inferable Process where
             pure (ctxp <> ctxq)
 
         -- (Tcopy)
-        NewP y a (OutputP (VarN u) (VarN y') p) :⊢ ctx | y == y' -> rule j "(Tcopy)" $ do
+        NewP y a (OutputP (VarN u) (VarN y') p) :⊢ ctx | y == y' -> rule j "(Tcopy)" do
             ctxp <- infer (p :⊢ mempty)
             unifyCtx ctx (ctxp & (delta %~ remove y))
 
         -- (Tcut)
-        NewP x a (ParP p q) :⊢ ctx -> rule j "(Tcut)" $ do
-            ctxp <- infer (p :⊢ mempty)
-            ctxq <- infer (q :⊢ mempty)
-            s <- (unify @Context @Type `on` delta %~ remove x) ctxp ctxq
+        NewP x a (ParP p q) :⊢ ctx -> rule j "(Tcut)" do
+            ctxp <- infer (p :⊢ ctx)
+            ctxq <- infer (q :⊢ ctx)
             a' <- lookupDelta x ctxp
             a <- lookupDelta x ctxq
             s <- unify @Type @Type (dual a) a'
-            unifyCtx (ctxp & delta %~ remove x)
-                     (ctxq & delta %~ remove x)
+            (unifyCtx `on` delta %~ remove x) ctxp ctxq
 
         -- (T!)
-        ReplicateP (VarN x) y q :⊢ ctx -> rule j "(T!)" $ do
+        ReplicateP (VarN x) y q :⊢ ctx -> rule j "(T!)" do
             ctxq <- infer (q :⊢ mempty)
             a <- lookupDelta y ctxq
             pure $ (ctxq <> ctx & delta %~ introduce x (OfCourseT a) . remove y)
 
         -- (T⊕)
-        InjectP (VarN x) l p :⊢ ctx -> rule j "(T⊕)" $ do
+        InjectP (VarN x) l p :⊢ ctx -> rule j "(T⊕)" do
             ctxp <- infer (p :⊢ mempty)
             a <- lookupDelta x ctxp
             pure (ctx <> ctxp & delta %~ introduce x (PlusT (Map.singleton l a)))
@@ -280,8 +252,8 @@ instance Inferable Process where
             pure (mconcat ctxs & delta %~ introduce x (WithT (Map.fromList fs)))
 
         -- (T?)
-        SourceP x u p :⊢ ctx -> rule j "(T?)" $ do
-            ctxp <- infer (p :⊢ mempty)
+        SourceP x u p :⊢ ctx -> rule j "(T?)" do
+            ctxp <- infer (p :⊢ ctx)
             a <- lookupTheta u ctxp
             pure $ (ctxp & theta %~ remove u)
                 <> (ctx  & delta %~ introduce x (WhyNotT a))

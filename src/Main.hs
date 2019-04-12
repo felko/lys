@@ -12,34 +12,47 @@ import Control.Lens hiding (Context)
 import Text.PrettyPrint.ANSI.Leijen
 
 bcIntBody :: Process
-bcIntBody = NewP "tea" (VarT "N") (OutputP (VarN "s") (VarN "tea") (NewP "cc" (VarT "I") (OutputP (VarN "s") (VarN "cc") (InputP (VarN "s") "r" NilP))))
+bcIntBody = NewP "tea" (Just $ IdentT "N") (OutputP (VarN "s") (VarN "tea") (NewP "cc" (Just $ IdentT "I") (OutputP (VarN "s") (VarN "cc") (InputP (VarN "s") "r" NilP))))
 
 p :: String -> Process
-p v = NewP "u" (VarT "G") (OutputP (VarN v) (VarN "u") NilP)
+p v = NewP "u" (Just $ VarT "G") (OutputP (VarN v) (VarN "u") NilP)
 
 s :: String -> Process
-s x = InputP (VarN x) "y" (SourceP x "u" (ReplicateP (VarN "y") "z" (AppP "p" (VarN "u"))))
+s x = InputP (VarN x) "y" (SourceP x "u" (ReplicateP (VarN "y") "z" (CallP "p" [VarN "u"])))
 
 t :: String -> Process
-t x = NewP "q" (VarT "Q") (OutputP (VarN x) (VarN "q") (ParP (AppP "q" (VarN "q")) (AppP "r" (VarN x))))
+t x = NewP "q" Nothing (OutputP (VarN x) (VarN "q") (ParP (CallP "q" [VarN "q"]) (CallP "r" [VarN x])))
 
 q :: String -> Process
-q x = ParP (NewP "k1" (VarT "K1") (OutputP (VarN x) (VarN "k1") (VarP "q1")))
-           (NewP "k2" (VarT "K2") (OutputP (VarN x) (VarN "k2") (VarP "q2")))
+q x = ParP (NewP "k1" Nothing (OutputP (VarN x) (VarN "k1") (CallP "q1" [])))
+           (NewP "k2" Nothing (OutputP (VarN x) (VarN "k2") (CallP "q2" [])))
 
 c :: Process
-c = NewP "x" (VarT "A") (ParP (s "x") (t "x"))
+c = NewP "x" Nothing (ParP (s "x") (t "x"))
 
-defaultGamma :: Env Scheme
+cell :: Process
+cell = NewP "s" Nothing (ParP (InputP (VarN "s") "v" (SourceP "s" "v" NilP)) (OutputP (VarN "s") (LitN (IntL 18)) NilP))
+
+defaultGamma :: Gamma
 defaultGamma = Env $ Map.fromList
-    [ ("p", Scheme ["A", "G"] ["v"] (mempty & (delta %~ introduce "z" (VarT "A")) . (theta %~ introduce "v" (VarT "G"))))
-    , ("q1", Scheme ["A"] [] (mempty & (delta %~ introduce "y" (VarT "A")) . (theta %~ introduce "u" (VarT "A"))))
-    , ("q2", Scheme ["A"] [] (mempty & (delta %~ introduce "y" (VarT "A")) . (theta %~ introduce "u" (VarT "A"))))
-    , ("q", Scheme ["Q"] ["q"] (mempty & delta %~ introduce "q" (VarT "Q")))
-    , ("r", Scheme ["A"] ["v"] (mempty & delta %~ introduce "v" (VarT "a")))
+    [ ("p", Scheme ["A", "G"] $ Scheme ["v"] (mempty & (delta %~ introduce "z" (VarT "A")) . (theta %~ introduce "v" (VarT "G"))))
+    , ("q1", Scheme ["A"] $ Scheme [] (mempty & (delta %~ introduce "y" (VarT "A")) . (theta %~ introduce "u" (VarT "A"))))
+    , ("q2", Scheme ["A"] $ Scheme [] (mempty & (delta %~ introduce "y" (VarT "A")) . (theta %~ introduce "u" (VarT "A"))))
+    , ("q", Scheme [] $ Scheme ["q"] (mempty & delta %~ introduce "q" (IdentT "Q")))
+    , ("r", Scheme ["A"] $ Scheme ["v"] (mempty & delta %~ introduce "v" (VarT "a")))
     ]
 
+defaultTau :: Env (Scheme Type Type)
+defaultTau = Env $ Map.fromList
+    [ ("Maybe", Scheme ["T"] (PlusT $ Map.fromList [("just", VarT "T"), ("nothing", OneT)]))
+    , ("Int", Scheme [] OneT)
+    , ("Q", Scheme [] OneT)
+    ]
+
+defaultEnv :: InferEnv
+defaultEnv = InferEnv defaultGamma defaultTau
+
 main :: IO ()
-main = case runInfer (infer (c :⊢ mempty)) defaultGamma of
+main = case runInfer (infer (c :⊢ mempty)) defaultEnv of
     Left (InferError err) -> putDoc (err <> char '\n')
     Right ctx -> print ctx
