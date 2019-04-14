@@ -1,6 +1,5 @@
 {-# LANGUAGE
-    LambdaCase
-  , FlexibleInstances
+    FlexibleInstances
   , FlexibleContexts
   , ConstrainedClassMethods
   , ConstraintKinds
@@ -9,7 +8,6 @@
   , ScopedTypeVariables
   , GeneralizedNewtypeDeriving
   , DeriveTraversable
-  , BlockArguments
   , OverloadedStrings
   , GADTs
   , Rank2Types
@@ -32,6 +30,7 @@ import Data.Key hiding (zip)
 import Data.Foldable
 import Data.Functor.Identity
 import qualified Data.Map as Map
+import qualified Data.MultiMap as MMap
 import qualified Data.Set as Set
 import Data.Functor.Classes
 
@@ -75,6 +74,7 @@ class Dual a where
 
 newtype Subst a = Subst
     { fromSubst :: Map.Map String a }
+    deriving (Functor, Foldable, Traversable)
 
 instance Show a => Show (Subst a) where
     show (Subst m)
@@ -86,6 +86,12 @@ instance Contextual a a => Semigroup (Subst a) where
 
 instance Contextual a a => Monoid (Subst a) where
     mempty = Subst mempty
+
+instance Ord k => Semigroup (MMap.MultiMap k v) where
+    (<>) = MMap.foldrWithKey \ k x acc -> MMap.insert k x acc
+
+instance Ord k => Monoid (MMap.MultiMap k v) where
+    mempty = MMap.empty
 
 restrict :: String -> Subst a -> Subst a
 restrict n (Subst s) = Subst (Map.delete n s)
@@ -217,7 +223,28 @@ instance Contextual Type Type where
         WithT fs -> WithT (substitute s <$> fs)
         VarT n -> fromMaybe (VarT n) (Map.lookup n m)
         IdentT n -> IdentT n
+        DualT t -> DualT (substitute (dual <$> s) t)
+        AppT t ts -> AppT (substitute s t) (substitute s <$> ts)
         PrimT t -> PrimT t
+
+instance Dual Type where
+    dual = \case
+        DualT (DualT a) -> dual a
+        DualT a -> a
+        ZeroT -> TopT
+        TopT -> ZeroT
+        OneT -> BottomT
+        BottomT -> OneT
+        OfCourseT t -> WhyNotT (dual t)
+        WhyNotT t -> OfCourseT (dual t)
+        TensorT a b -> ParT (dual a) (dual b)
+        ParT a b -> TensorT (dual a) (dual b)
+        PlusT fs -> WithT (dual <$> fs)
+        WithT fs -> PlusT (dual <$> fs)
+        PrimT t -> DualT (PrimT t)
+        VarT n -> DualT (VarT n)
+        AppT t ts -> AppT (DualT t) ts
+        IdentT n -> DualT (IdentT n)
 
 newtype InferError = InferError Doc
     deriving Show
@@ -313,15 +340,16 @@ subst = modifying currentSubst . (<>)
 class Substituable c => Unifiable a c where
     unify :: a -> a -> Infer (Subst c)
 
+class Unified a where
+    unified :: a -> a -> Infer a
+
 instance Unifiable a a => Unifiable (Env a) a where
     unify e e' = fold <$> sequence (alignWithKey f e e')
         where f k = these (const (pure mempty)) (const (pure mempty)) unify
 
-unifyEnv :: forall a. Unifiable a a => Env a -> Env a -> Infer (Env a)
-unifyEnv e e' = sequence (alignWithKey f e e')
-    where f k = these pure pure \ t t' -> do
-                s <- unify @a @a t t'
-                pure (substitute s t)
+instance Unified a => Unified (Env a) where
+    unified e e' = sequence (alignWithKey f e e')
+        where f _ = these pure pure unified
 
 complete :: Context -> Infer ()
 complete (Context (Env d) _)
