@@ -119,8 +119,8 @@ defaultEnv = InferEnv defaultGamma defaultTau
 
 defaultCtx :: Context
 defaultCtx = mempty
-    & delta %~ introduce "mx" (DualT (AppT (IdentT "Maybe") [VarT "A"]))
-             . introduce "my" (VarT "B") -- (AppT (IdentT "Maybe") [PrimT IntT])
+    & delta %~ introduce "mx" (VarT "X")  -- (DualT (AppT (IdentT "Maybe") [VarT "A"]))
+             . introduce "my" (VarT "Y")  -- (AppT (IdentT "Maybe") [VarT "A"]) -- (AppT (IdentT "Maybe") [PrimT IntT])
 
 main :: IO ()
 main = case runInfer (infer (fmapIdMaybe "mx" "my" :⊢ defaultCtx)) defaultEnv of

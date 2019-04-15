@@ -5,6 +5,7 @@
   , ConstraintKinds
   , TypeFamilies
   , TypeApplications
+  , TupleSections
   , ScopedTypeVariables
   , GeneralizedNewtypeDeriving
   , DeriveTraversable
@@ -256,16 +257,14 @@ instance Monoid InferError where
     mempty = InferError "Unknown error"
 
 data InferState = InferState
-    { _currentSubst  :: Subst Type
-    , _typeVarSupply :: Int
+    { _typeVarSupply :: Int
     , _depth         :: Int }
     deriving Show
 makeLenses ''InferState
 
 defaultInferState :: InferState
 defaultInferState = InferState
-    { _currentSubst  = Subst mempty
-    , _typeVarSupply = 0
+    { _typeVarSupply = 0
     , _depth         = 0 }
 
 type Gamma = Env (Scheme Type (Scheme Name Context))
@@ -334,22 +333,26 @@ freshType prefix = do
     typeVarSupply += 1
     pure (VarT ('$':prefix ++ show i))
 
-subst :: Subst Type -> Infer ()
-subst = modifying currentSubst . (<>)
-
-class Substituable c => Unifiable a c where
+class Contextual a c => Unifiable a c where
     unify :: a -> a -> Infer (Subst c)
 
-class Unified a where
-    unified :: a -> a -> Infer a
+class Unifiable a c => Unified a c where
+    unified :: a -> a -> Infer (a, Subst c)
 
-instance Unifiable a a => Unifiable (Env a) a where
+unified' :: forall proxy a c. Unified a c => proxy c -> a -> a -> Infer a
+unified' _ x y = fst <$> unified @a @c x y
+
+instance (Show a, Unifiable a c, Substituable c) => Unifiable (Env a) c where
     unify e e' = fold <$> sequence (alignWithKey f e e')
-        where f k = these (const (pure mempty)) (const (pure mempty)) unify
+        where f k = these (const err) (const err) unify
+              err = throwError (InferError $ "Couldn't unify environments" <+> string (show e) <+> "and" <+> string (show e'))
 
-instance Unified a => Unified (Env a) where
-    unified e e' = sequence (alignWithKey f e e')
-        where f _ = these pure pure unified
+unzipEnv :: Env (a, b) -> (Env a, Env b)
+unzipEnv e = (fst <$> e, snd <$> e)
+
+instance (Show a, Unified a c, Substituable c) => Unified (Env a) c where
+    unified e e' = (_2 %~ fold) . unzipEnv <$> sequence (alignWithKey f e e')
+        where f _ = these (pure . (,mempty @(Subst c))) (pure . (,mempty)) unified
 
 complete :: Context -> Infer ()
 complete (Context (Env d) _)
@@ -365,4 +368,4 @@ makeLenses ''Judgement
 
 class Inferable a where
     type TypeOf a :: *
-    infer :: Judgement a -> Infer Context
+    infer :: Judgement a -> Infer (Context, Subst (TypeOf a))

@@ -23,5 +23,8 @@ rule (p :⊢ ctx) name i = indentDebug \ tab ->
         (i >>= \ x -> trace (tab ++ '/':name ++ " " ++ show x) $ pure x)
             `catchError` \ e -> trace (tab ++ '/':name ++ ": " ++ show e) (throwError e)
 
-unifying :: (Show a, Unifiable a a) => a -> a -> Infer (Subst a) -> Infer (Subst a)
-unifying t t' = indentDebug . flip \ tab -> trace (tab <> show t <> " ~ " <> show t')
+unifying :: (Show a, Eq a, Unifiable a a) => ((a, a) -> Infer b) -> a -> a -> Infer b
+unifying u t t' = indentDebug \ tab -> if t == t' then
+        u (t, t')
+    else
+        trace (tab <> show t <> " ~ " <> show t') $ u (t, t')
