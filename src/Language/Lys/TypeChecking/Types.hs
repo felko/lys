@@ -19,6 +19,10 @@
 
 module Language.Lys.TypeChecking.Types where
 
+import Language.Lys.Core
+import Language.Lys.Pretty
+import Language.Lys.Types.Context
+import Language.Lys.Types.Env
 import Language.Lys.Types
 
 import Data.List (intercalate)
@@ -26,7 +30,6 @@ import Data.Maybe (catMaybes, fromMaybe)
 import Data.These
 import Data.Align
 import Data.Align.Key
-import Data.Key hiding (zip)
 
 import Data.Foldable
 import Data.Functor.Identity
@@ -75,12 +78,12 @@ class Dual a where
 
 newtype Subst a = Subst
     { fromSubst :: Map.Map String a }
-    deriving (Functor, Foldable, Traversable)
+    deriving (Eq, Show, Functor, Foldable, Traversable)
 
-instance Show a => Show (Subst a) where
-    show (Subst m)
+instance PrettyShow a => PrettyShow (Subst a) where
+    prettyShow (Subst m)
         | Map.null m = "•"
-        | otherwise  = intercalate ", " (map (\ (x, t) -> x <> " -> " <> show t) (Map.assocs m))
+        | otherwise  = cat $ punctuate ", " (map (\ (x, t) -> string x <> " -> " <> prettyShow t) (Map.assocs m))
 
 instance Contextual a a => Semigroup (Subst a) where
     Subst s <> Subst s' = Subst (Map.map (substitute (Subst s)) s' <> s)
@@ -105,53 +108,6 @@ restrictMany ns (Subst s) = Subst (Map.withoutKeys s ns)
 
 singleton :: Ord a => a -> Set.Set a
 singleton = Set.singleton
-
-newtype Env a = Env { _asMap :: Map.Map String a }
-    deriving ( Semigroup, Monoid
-             , Semialign, Align, Keyed, AlignWithKey
-             , Functor, Foldable, Traversable)
-
-type instance Key Env = String
-type instance Index (Env a) = String
-type instance IxValue (Env a) = a
-
-makeLenses ''Env
-
-instance Ixed (Env a) where
-    ix k = asMap.ix k
-
-instance At (Env a) where
-    at k = asMap.at k
-
-instance Show a => Show (Env a) where
-    show (Env m)
-        | Map.null m = "•"
-        | otherwise  = intercalate ", " (map (\ (x, t) -> x <> ": " <> show t) (Map.assocs m))
-
--- | The type that stores the intermediate type bindings for inference
-data Context = Context
-    { _delta :: Env Type  -- ^ The global, unrestricted environment
-    , _theta :: Env Type  -- ^ The environment under the linear constraints
-    }
-makeLenses ''Context
-
-instance Show Context where
-    show (Context d t) = "∆ = " <> show d <> "; Θ = " <> show t
-
-instance Semigroup Context where
-    Context delta1 theta1 <> Context delta2 theta2 = Context (delta1 <> delta2) (theta1 <> theta2)
-
-instance Monoid Context where
-    mempty = Context mempty mempty
-
-introduce :: String -> a -> Env a -> Env a
-introduce x t (Env m) = Env (Map.insert x t m)
-
-remove :: String -> Env a -> Env a
-remove x (Env m) = Env (Map.delete x m)
-
-lookupEnv :: String -> Env a -> Maybe a
-lookupEnv x (Env m) = Map.lookup x m 
 
 data Scheme a c = Scheme
     { _schemeVars :: [String]

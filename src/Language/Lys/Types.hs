@@ -4,27 +4,9 @@ module Language.Lys.Types where
 
 import qualified Data.Map as Map
 
-import Data.Deriving
+import Control.Lens
 
 -- ≡≅⊗⊕⊥⊤⊢⊣⋁⋀∝∈∉⎜⊸⅋&ΔΓν
-
--- | The core representation of processes
-data Process
-    = NilP
-    | ParP Process Process
-    | NewP String (Maybe Type) Process
-    | OutputP Name Name Process
-    | InputP Name String Process
-    | ReplicateP Name String Process
-    | InjectP Name String Name Process
-    | CaseP Name [Branch]
-    | CallP String [Name]
-    | SourceP String String Process
-    | ContractP String String Process Process
-    deriving (Eq, Show)
-
-data Branch = Branch String Pattern Process
-    deriving (Eq, Show)
 
 data Pattern
     = VarPat String
@@ -38,9 +20,16 @@ data Name
     deriving (Eq, Ord, Show)
 
 data Literal
-    = IntL Int
+    = IntL Integer
     | OneL
     deriving (Eq, Ord, Show)
+
+data Branch a = Branch
+    { _branchLabel   :: String
+    , _branchPatern  :: Pattern
+    , _branchProcess :: a }
+    deriving (Eq, Show)
+makeLenses ''Branch
 
 type Fields = Map.Map String Type
 

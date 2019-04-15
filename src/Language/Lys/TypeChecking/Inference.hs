@@ -13,7 +13,10 @@ module Language.Lys.TypeChecking.Inference where
 
 import Language.Lys.TypeChecking.Types
 import Language.Lys.TypeChecking.Debug
+import Language.Lys.Core
 import Language.Lys.Types
+import Language.Lys.Types.Env
+import Language.Lys.Types.Context
 
 import Control.Arrow ((>>>))
 import Control.Applicative
@@ -34,14 +37,6 @@ import Text.PrettyPrint.ANSI.Leijen hiding ((<>), (<$>))
 import Control.Lens hiding (Context)
 
 import Debug.Trace
-
-data Binding = Binding
-    { _bindingName :: String
-    , _bindingType :: Type }
-    deriving (Eq)
-
-instance Ord Binding where
-    compare = compare `on` _bindingName
 
 normalForm :: Process -> Process
 normalForm = \case
@@ -69,11 +64,11 @@ normalForm = \case
     InputP x y p -> InputP x y (normalForm p)
     ReplicateP x y p -> ReplicateP x y (normalForm p)
     InjectP x f y p -> InjectP x f y (normalForm p)
-    CaseP x bs -> CaseP x $ bs <&> \ (Branch l y p) -> Branch l y (normalForm p)
+    MatchP x bs -> MatchP x $ bs <&> \ (Branch l y p) -> Branch l y (normalForm p)
     CallP p xs -> CallP p xs
     SourceP x u p -> SourceP x u (normalForm p)
 
-instance Contextual Branch Name where
+instance Contextual a c => Contextual (Branch a) c where
     freeNames d (Branch l py p) = case py of
         WildcardPat -> freeNames d p
         VarPat y    -> freeNames d p \\ singleton y
@@ -90,7 +85,7 @@ instance Contextual Process Name where
         InputP     x y p -> freeNames d x <> (freeNames d p \\ singleton y)
         ReplicateP x y p -> freeNames d x <> (freeNames d p \\ singleton y)
         InjectP  x f y p -> freeNames d x <> freeNames d y <> freeNames d p
-        CaseP      x  bs -> freeNames d x <> foldMap (freeNames d) bs
+        MatchP     x  bs -> freeNames d x <> foldMap (freeNames d) bs
         CallP      p  xs -> foldMap (freeNames d) xs
         SourceP    x u p -> singleton x <> singleton u <> freeNames d p
 
@@ -103,7 +98,7 @@ instance Contextual Process Name where
         ReplicateP x y p -> ReplicateP (substitute s x) y (substitute (restrict y s) p)
         InjectP  x f (VarN y) p -> InjectP (substitute s x) f (VarN y) (substitute (restrict y s) p)
         InjectP  x f (LitN y) p -> InjectP (substitute s x) f (LitN y) (substitute s p)
-        CaseP      x  bs -> CaseP (substitute s x) (substitute s <$> bs)
+        MatchP     x  bs -> MatchP (substitute s x) (substitute s <$> bs)
         CallP      p  xs -> CallP p (substitute s <$> xs)
         SourceP    x u p -> case Map.lookup x m of
             Just (VarN y) -> SourceP y u (substitute (restrict u s) p)
@@ -336,7 +331,7 @@ instance Inferable Process where
             pure (ctx', s3 <> s2 <> s1)
 
         -- (T&)
-        CaseP (VarN x) alts :⊢ ctx -> rule j "(T&)" do
+        MatchP (VarN x) alts :⊢ ctx -> rule j "(T&)" do
             (fs, ctxSb) <- unzip <$> forM alts \ (Branch l pat p) -> case pat of
                 WildcardPat -> do
                     (ctxp, s1) <- infer (p :⊢ ctx)

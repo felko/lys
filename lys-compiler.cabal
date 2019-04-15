@@ -26,12 +26,29 @@ library
 
 executable lys-compiler
   main-is:             Main.hs
-  other-modules:       Language.Lys.TypeChecking
+  other-modules:       Language.Lys.Parser
+                     , Language.Lys.Parser.AST
+                     , Language.Lys.Parser.Program
+                     , Language.Lys.Parser.Declaration
+                     , Language.Lys.Parser.Type
+                     , Language.Lys.Parser.Process
+                     , Language.Lys.Parser.Name
+                     , Language.Lys.Parser.Lexer
+                     , Language.Lys.Parser.Types
+                     , Language.Lys.TypeChecking
                      , Language.Lys.TypeChecking.Inference
                      , Language.Lys.TypeChecking.Types
                      , Language.Lys.TypeChecking.Debug
+                     , Language.Lys.Core
+                     , Language.Lys.Desugar
                      , Language.Lys.Pretty
+                     , Language.Lys.Pretty.AST
+                     , Language.Lys.Pretty.Type
+                     , Language.Lys.Pretty.Types
+                     , Language.Lys.Pretty.Class
                      , Language.Lys.Types
+                     , Language.Lys.Types.Env
+                     , Language.Lys.Types.Context
                      , Language.Lys
 
   extensions:          LambdaCase
