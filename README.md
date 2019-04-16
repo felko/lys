@@ -22,7 +22,7 @@ The language is an extension of synchronous π-calculus:
 ### Type system
 
 The type system used is called πCLL, defined in "Linear logic propositions as session types" — Luis Caires,
-Franck Pfenning and Bernardo Toninho, and corresponds to full intuitionistic linear logic.
+Franck Pfenning and Bernardo Toninho, and corresponds to full classical linear logic.
 
 The logical connectives and truth values have been modified to be unicode characters
 
