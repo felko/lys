@@ -13,7 +13,9 @@ module Language.Lys.TypeChecking.Inference where
 
 import Language.Lys.TypeChecking.Types
 import Language.Lys.TypeChecking.Debug
+import qualified Language.Lys.Parser.AST as AST
 import Language.Lys.Core
+import Language.Lys.Desugar
 import Language.Lys.Types
 import Language.Lys.Types.Env
 import Language.Lys.Types.Context
@@ -136,13 +138,13 @@ instance Unifiable Type Type where
             if length ts == length tv then
                 unify (substitute (Subst (Map.fromList (zip tv ts))) tx) t'
             else
-                throwError (InferError $ "Type constructor" <+> string n <+> "expected" <+> int (length tv) <+> "arguments, got" <+> int (length ts))
+                throwError1 (TypeError $ "Type constructor" <+> string n <+> "expected" <+> int (length tv) <+> "arguments, got" <+> int (length ts))
         (t, AppT (IdentT n') ts') -> do
             Scheme tv' tx' <- lookupTau n'
             if length ts' == length tv' then
                 unify t (substitute (Subst (Map.fromList (zip tv' ts'))) tx')
             else
-                throwError (InferError $ "Type constructor" <+> string n' <+> "expected" <+> int (length tv') <+> "arguments, got" <+> int (length ts'))
+                throwError1 (TypeError $ "Type constructor" <+> string n' <+> "expected" <+> int (length tv') <+> "arguments, got" <+> int (length ts'))
 
         (AppT (DualT (IdentT n)) ts, t') -> unify (AppT (IdentT n) ts) (DualT t')
         (t, AppT (DualT (IdentT n')) ts') -> unify (DualT t) (AppT (IdentT n') ts')
@@ -167,7 +169,7 @@ instance Unifiable Type Type where
         (PrimT t, PrimT t') | t == t' -> pure mempty
 
         -- Failure
-        (t, t') -> throwError (InferError $ "Unable to unify types" <+> string (show t) <+> "and" <+> string (show t'))
+        (t, t') -> throwError1 (TypeError $ "Unable to unify types" <+> string (show t) <+> "and" <+> string (show t'))
 
 instance Unified Type Type where
     unified = curry \case
@@ -358,6 +360,14 @@ instance Inferable Process where
             (ctx', s2) <- (unified `on` substitute s1) (ctx & delta %~ introduce x (WhyNotT a)) (ctxp & theta %~ remove u)
             pure (ctx', s2 <> s1)
 
-        (p :⊢ ctx) -> throwError (InferError $ "Couldn't infer process" <+> string (show (j ^. judged)))
+        (p :⊢ ctx) -> throwError1 (TypeError $ "Couldn't infer process" <+> string (show (j ^. judged)))
 
+instance Checkable Process Context where
+    check = checkInfer . fmap fst . infer . (:⊢ mempty)
 
+instance Inferable AST.Process where
+    type TypeOf AST.Process = Type
+    infer = infer . (judged %~ desugar)
+
+instance Checkable AST.Process Context where
+    check = check . desugar

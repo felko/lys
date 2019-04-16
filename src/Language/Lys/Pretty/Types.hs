@@ -10,25 +10,25 @@ import Language.Lys.Types.Context
 
 import qualified Data.Map as Map
 
-instance PrettyShow Name where
-    prettyShow = \case
+instance Pretty Name where
+    pretty = \case
         VarN x -> string x
-        LitN l -> prettyShow l
+        LitN l -> pretty l
 
-instance PrettyShow Literal where
-    prettyShow = \case
+instance Pretty Literal where
+    pretty = \case
         OneL -> "()"
         IntL x -> integer x
 
-instance PrettyShow a => PrettyShow (Branch a) where
-    prettyShow (Branch l pat p) = case pat of
-        WildcardPat -> string l <> ":" <+> prettyShow p
-        VarPat y    -> string l <> parens (string y) <> ":" <+> prettyShow p
+instance Pretty a => Pretty (Branch a) where
+    pretty (Branch l pat p) = case pat of
+        WildcardPat -> string l <> ":" <+> pretty p
+        VarPat y    -> string l <> parens (string y) <> ":" <+> pretty p
 
-instance PrettyShow a => PrettyShow (Env a) where
-    prettyShow (Env m)
+instance Pretty a => Pretty (Env a) where
+    pretty (Env m)
         | Map.null m = "•"
-        | otherwise = cat $ punctuate ", " (map (\ (x, t) -> string x <> ": " <> prettyShow t) (Map.assocs m))
+        | otherwise = cat $ punctuate ", " (map (\ (x, t) -> string x <> ": " <> pretty t) (Map.assocs m))
 
-instance PrettyShow Context where
-    prettyShow (Context d t) = parens ("∆ = " <> prettyShow d <> "; Θ = " <> prettyShow t)
+instance Pretty Context where
+    pretty (Context d t) = parens ("∆ = " <> pretty d <> "; Θ = " <> pretty t)

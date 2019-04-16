@@ -21,11 +21,11 @@ needsParens = \case
 
 subTypeExpr :: Type -> Doc
 subTypeExpr t
-    | needsParens t = parens (prettyShow t)
-    | otherwise     = prettyShow t
+    | needsParens t = parens (pretty t)
+    | otherwise     = pretty t
 
-instance PrettyShow Type where
-    prettyShow = \case
+instance Pretty Type where
+    pretty = \case
         TopT -> "⊤"
         BottomT -> "⊥"
         OneT -> "1"
@@ -39,12 +39,12 @@ instance PrettyShow Type where
         DualT t -> "~" <> subTypeExpr t
         VarT n -> string n
         IdentT n -> string n
-        AppT f ts -> prettyShow f <> anglesSep (map prettyShow ts)
-        PrimT t -> prettyShow t
+        AppT f ts -> pretty f <> anglesSep (map pretty ts)
+        PrimT t -> pretty t
       where prettyShowFields = bracesSep
-                . map (\ (l, t) -> string l <> ":" <+> prettyShow t)
+                . map (\ (l, t) -> string l <> ":" <+> pretty t)
                 . Map.assocs
 
-instance PrettyShow PrimType where
-    prettyShow = \case
+instance Pretty PrimType where
+    pretty = \case
         IntT -> "Int"

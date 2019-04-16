@@ -36,6 +36,8 @@ executable lys-compiler
                      , Language.Lys.Parser.Lexer
                      , Language.Lys.Parser.Types
                      , Language.Lys.TypeChecking
+                     , Language.Lys.TypeChecking.Program
+                     , Language.Lys.TypeChecking.Declaration
                      , Language.Lys.TypeChecking.Inference
                      , Language.Lys.TypeChecking.Types
                      , Language.Lys.TypeChecking.Debug
@@ -43,6 +45,7 @@ executable lys-compiler
                      , Language.Lys.Desugar
                      , Language.Lys.Pretty
                      , Language.Lys.Pretty.AST
+                     , Language.Lys.Pretty.Core
                      , Language.Lys.Pretty.Type
                      , Language.Lys.Pretty.Types
                      , Language.Lys.Pretty.Class

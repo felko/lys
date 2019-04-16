@@ -12,56 +12,56 @@ import Language.Lys.Types
 
 import Control.Lens hiding (Context(..))
 
-instance PrettyShow Process where
-    prettyShow = \case
+instance Pretty Process where
+    pretty = \case
         NilP -> "end"
-        ParP p q -> prettyShow p <+> "|" <+> prettyShow q
-        NewP x Nothing p -> "new" <+> string x <+> braces (prettyShow p)
-        NewP x (Just t) p -> "new" <+> string x <> ":" <+> prettyShow t <+> braces (prettyShow p)
-        OutputP x y p -> prettyShow x <> "!" <> parens (prettyShow y) <> "," <+> prettyShow p
-        InputP x y p -> prettyShow x <> "?" <> parens (string y) <> "," <+> prettyShow p
-        ReplicateP x y p -> "repeat" <+> prettyShow x <> "?" <> parens (string y) <> "," <+> prettyShow p
-        SourceP x y p -> "repeat" <+> string x <> "!" <> parens (string y) <> "," <+> prettyShow p
-        InjectP x l y p -> prettyShow x <> dot <> string l <> "!" <> parens (prettyShow y) <> "," <+> prettyShow p
-        MatchP x bs -> "match" <+> prettyShow x <+> bracesSep (map prettyShow bs)
-        CallP p xs -> string p <> parensSep (map prettyShow xs)
-        ContractP x y p q -> "contract" <+> string x <> parens (string y) <+> braces (prettyShow p) <+> "|" <+> prettyShow q
+        ParP p q -> pretty p <+> "|" <+> pretty q
+        NewP x Nothing p -> "new" <+> string x <+> braces (pretty p)
+        NewP x (Just t) p -> "new" <+> string x <> ":" <+> pretty t <+> braces (pretty p)
+        OutputP x y p -> pretty x <> "!" <> parens (pretty y) <> "," <+> pretty p
+        InputP x y p -> pretty x <> "?" <> parens (string y) <> "," <+> pretty p
+        ReplicateP x y p -> "repeat" <+> pretty x <> "?" <> parens (string y) <> "," <+> pretty p
+        SourceP x y p -> "repeat" <+> string x <> "!" <> parens (string y) <> "," <+> pretty p
+        InjectP x l y p -> pretty x <> dot <> string l <> "!" <> parens (pretty y) <> "," <+> pretty p
+        MatchP x bs -> "match" <+> pretty x <+> bracesParSep (map pretty bs)
+        CallP p xs -> string p <> parensSep (map pretty xs)
+        ContractP x y p q -> "contract" <+> string x <> parens (string y) <+> braces (pretty p) <+> "|" <+> pretty q
 
-instance PrettyShow Constraint where
-    prettyShow = \case
+instance Pretty Constraint where
+    pretty = \case
         NoneC -> "()"
 
-instance PrettyShow TypeParam where
-    prettyShow = \case
+instance Pretty TypeParam where
+    pretty = \case
         ParamTP t    -> string t
-        ConstrTP t c -> string t <> ":" <+> prettyShow c
+        ConstrTP t c -> string t <> ":" <+> pretty c
 
-instance PrettyShow NameParam where
-    prettyShow = \case
+instance Pretty NameParam where
+    pretty = \case
         InferredNP  x   -> string x
-        AnnotatedNP x t -> string x <> ":" <+> prettyShow t
+        AnnotatedNP x t -> string x <> ":" <+> pretty t
 
-instance PrettyShow Declaration where
-    prettyShow = \case
-        TypeD n [] t -> "type" <+> string n <+> "=" <+> prettyShow t
-        TypeD n as t -> "type" <+> string n <> anglesSep (map prettyShow as) <+> "=" <+> prettyShow t
-        ProcessD n [] ps p -> "process" <+> string n <> parensSep (map prettyShow ps) <+> braces (prettyShow p)
-        ProcessD n as ps p -> "process" <+> string n <> anglesSep (map prettyShow as) <+> parensSep (map prettyShow ps) <+> bracesBlock (prettyShow p)
+instance Pretty Declaration where
+    pretty = \case
+        TypeD n [] t -> "type" <+> string n <+> "=" <+> pretty t
+        TypeD n as t -> "type" <+> string n <> anglesSep (map pretty as) <+> "=" <+> pretty t
+        ProcessD n [] ps p -> "process" <+> string n <> parensSep (map pretty ps) <+> braces (pretty p)
+        ProcessD n as ps p -> "process" <+> string n <> anglesSep (map pretty as) <+> parensSep (map pretty ps) <+> bracesBlock (pretty p)
 
-instance PrettyShow Export where
-    prettyShow = \case
+instance Pretty Export where
+    pretty = \case
         TypeE t -> string t
         ProcessE p -> string p
         ModuleE mod -> dotSep (map string mod)
 
-instance PrettyShow Import where
-    prettyShow = \case
+instance Pretty Import where
+    pretty = \case
         ImportI mod -> dotSep (map string mod)
 
-instance PrettyShow Program where
-    prettyShow (Program mod exps imps decls) = vsep
-        [ "module" <+> dotSep (map string mod) <+> parensSep (map prettyShow exps)
+instance Pretty Program where
+    pretty (Program mod exps imps decls) = vsep
+        [ "module" <+> dotSep (map string mod) <+> parensSep (map pretty exps)
         , line
-        , vsep (map prettyShow imps)
+        , vsep (map pretty imps)
         , line
-        , vsep (map ((<> line) . prettyShow) decls) ]
+        , vsep (map ((<> line) . pretty) decls) ]

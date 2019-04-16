@@ -4,7 +4,7 @@ import Bidule.Test
 
 type Maybe<a> = +{ just: a, nothing }
 
-process mapId<a>(mx: ~Maybe<a>, my: Maybe<a>) {
+process mapId(mx, my) {
     match mx { just(x): my.just!(x)
              | nothing: my.nothing! }
 }

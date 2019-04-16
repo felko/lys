@@ -14,6 +14,7 @@
   , Rank2Types
   , UndecidableInstances
   , MultiParamTypeClasses
+  , FunctionalDependencies
   , TemplateHaskell
   #-}
 
@@ -80,10 +81,10 @@ newtype Subst a = Subst
     { fromSubst :: Map.Map String a }
     deriving (Eq, Show, Functor, Foldable, Traversable)
 
-instance PrettyShow a => PrettyShow (Subst a) where
-    prettyShow (Subst m)
+instance Pretty a => Pretty (Subst a) where
+    pretty (Subst m)
         | Map.null m = "•"
-        | otherwise  = cat $ punctuate ", " (map (\ (x, t) -> string x <> " -> " <> prettyShow t) (Map.assocs m))
+        | otherwise  = cat $ punctuate ", " (map (\ (x, t) -> string x <> " -> " <> pretty t) (Map.assocs m))
 
 instance Contextual a a => Semigroup (Subst a) where
     Subst s <> Subst s' = Subst (Map.map (substitute (Subst s)) s' <> s)
@@ -203,14 +204,13 @@ instance Dual Type where
         AppT t ts -> AppT (DualT t) ts
         IdentT n -> DualT (IdentT n)
 
-newtype InferError = InferError Doc
+newtype TypeError = TypeError Doc
     deriving Show
 
-instance Semigroup InferError where
-    (<>) = flip const
+instance Pretty TypeError where
+    pretty (TypeError t) = t
 
-instance Monoid InferError where
-    mempty = InferError "Unknown error"
+type TypeErrors = [TypeError]
 
 data InferState = InferState
     { _typeVarSupply :: Int
@@ -224,32 +224,42 @@ defaultInferState = InferState
     , _depth         = 0 }
 
 type Gamma = Env (Scheme Type (Scheme Name Context))
+type Tau = Env (Scheme Type Type)
 
-data InferEnv = InferEnv
+data GlobalEnv = GlobalEnv
     { _gamma :: Gamma
-    , _tau   :: Env (Scheme Type Type) }
+    , _tau   :: Tau }
     deriving (Show)
-makeLenses ''InferEnv
+makeLenses ''GlobalEnv
+
+instance Semigroup GlobalEnv where
+    GlobalEnv g t <> GlobalEnv g' t' = GlobalEnv (g <> g') (t <> t')
+
+instance Monoid GlobalEnv where
+    mempty = GlobalEnv mempty mempty
 
 newtype Infer a = Infer
-    { unInfer :: ReaderT InferEnv (StateT InferState (Except InferError)) a }
+    { unInfer :: ReaderT GlobalEnv (StateT InferState (Except TypeErrors)) a }
     deriving ( Functor, Applicative, Alternative, Monad
-             , MonadReader InferEnv
+             , MonadReader GlobalEnv
              , MonadState InferState
-             , MonadError InferError )
+             , MonadError TypeErrors )
 
-runInfer :: Infer a -> InferEnv -> Either InferError a
+throwError1 :: MonadError [e] m => e -> m a
+throwError1 = throwError . pure
+
+runInfer :: Infer a -> GlobalEnv -> Either TypeErrors a
 runInfer (Infer m) env = runExcept (evalStateT (runReaderT m env) defaultInferState)
 
 
 lookupTheta, lookupDelta, lookupDeltaBottom, lookupDeltaOne :: String -> Context -> Infer Type
 lookupTheta x ctx = case lookupEnv x (ctx ^. theta) of
     Just t -> pure t
-    Nothing -> throwError (InferError $ "Unrestricted name" <+> string x <+> "is not in scope")
+    Nothing -> throwError1 (TypeError $ "Unrestricted name" <+> string x <+> "is not in scope")
 
 lookupDelta x ctx = case lookupEnv x (ctx ^. delta) of
     Just t -> pure t
-    Nothing -> throwError (InferError $ "Name" <+> string x <+> "is not in scope")
+    Nothing -> throwError1 (TypeError $ "Name" <+> string x <+> "is not in scope")
 
 lookupDeltaBottom x ctx = case lookupEnv x (ctx ^. delta) of
     Just t -> pure t
@@ -262,12 +272,12 @@ lookupDeltaOne x ctx = case lookupEnv x (ctx ^. delta) of
 lookupGamma :: String -> Infer (Scheme Type (Scheme Name Context))
 lookupGamma p = asks (view $ gamma.at p) >>= \case
     Just ctx -> pure ctx
-    Nothing  -> throwError (InferError $ "Process" <+> string p <+> "is not defined")
+    Nothing  -> throwError1 (TypeError $ "Process" <+> string p <+> "is not defined")
 
 lookupTau :: String -> Infer (Scheme Type Type)
 lookupTau n = asks (view $ tau.at n) >>= \case
     Just t -> pure t
-    Nothing  -> throwError (InferError $ "Type" <+> string n <+> "is not defined")
+    Nothing  -> throwError1 (TypeError $ "Type" <+> string n <+> "is not defined")
 
 call :: Contextual c Name => [Name] -> Scheme Name c -> Infer c
 call ns (Scheme nv t) = do
@@ -301,7 +311,7 @@ unified' _ x y = fst <$> unified @a @c x y
 instance (Show a, Unifiable a c, Substituable c) => Unifiable (Env a) c where
     unify e e' = fold <$> sequence (alignWithKey f e e')
         where f k = these (const err) (const err) unify
-              err = throwError (InferError $ "Couldn't unify environments" <+> string (show e) <+> "and" <+> string (show e'))
+              err = throwError1 (TypeError $ "Couldn't unify environments" <+> string (show e) <+> "and" <+> string (show e'))
 
 unzipEnv :: Env (a, b) -> (Env a, Env b)
 unzipEnv e = (fst <$> e, snd <$> e)
@@ -313,7 +323,7 @@ instance (Show a, Unified a c, Substituable c) => Unified (Env a) c where
 complete :: Context -> Infer ()
 complete (Context (Env d) _)
     | Map.null d = pure ()
-    | otherwise  = throwError (InferError $ "Environment is not complete")
+    | otherwise  = throwError1 (TypeError "Environment is not complete")
 
 infix 0 :⊢
 
@@ -325,3 +335,33 @@ makeLenses ''Judgement
 class Inferable a where
     type TypeOf a :: *
     infer :: Judgement a -> Infer (Context, Subst (TypeOf a))
+
+data CheckError
+    = TypeCheckError TypeError
+    deriving Show
+
+instance Pretty CheckError where
+    pretty = \case
+        TypeCheckError e -> pretty e
+
+type CheckErrors = [CheckError]
+
+newtype Check a = Check
+    { unCheck :: StateT GlobalEnv (Except CheckErrors) a }
+    deriving ( Functor, Applicative, Alternative, Monad
+             , MonadState GlobalEnv
+             , MonadError CheckErrors )
+
+runCheck :: Check a -> GlobalEnv -> Either CheckErrors (a, GlobalEnv)
+runCheck (Check m) e = runExcept (runStateT m e)
+
+evalCheck :: Check a -> GlobalEnv -> Either CheckErrors a
+evalCheck c e = fst <$> runCheck c e
+
+class Checkable a c | a -> c where
+    check :: a -> Check c
+
+checkInfer :: Infer a -> Check a
+checkInfer m = runInfer m <$> get >>= \case
+    Left errs -> throwError (TypeCheckError <$> errs)
+    Right val -> pure val

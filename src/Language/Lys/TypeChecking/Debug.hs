@@ -9,6 +9,8 @@ import Control.Lens
 
 import Debug.Trace
 
+import Text.PrettyPrint.ANSI.Leijen hiding ((<$>), (<>))
+
 indentDebug :: (String -> Infer a) -> Infer a
 indentDebug f = do
     d <- use depth
@@ -17,14 +19,14 @@ indentDebug f = do
     depth -= 1
     pure r
 
-rule :: (Show a, Show b) => Judgement b -> String -> Infer a -> Infer a
+rule :: (Pretty a, Pretty b) => Judgement b -> String -> Infer a -> Infer a
 rule (p :⊢ ctx) name i = indentDebug \ tab ->
-    trace (tab ++ name ++ " " ++ show p ++ "\n\t" ++ tab ++ show ctx) $
-        (i >>= \ x -> trace (tab ++ '/':name ++ " " ++ show x) $ pure x)
-            `catchError` \ e -> trace (tab ++ '/':name ++ ": " ++ show e) (throwError e)
+    trace (tab ++ name ++ " " ++ prettyShow p ++ "\n\t" ++ tab ++ prettyShow ctx) $
+        (i >>= \ x -> trace (tab ++ '/':name ++ " " ++ prettyShow x) $ pure x)
+            `catchError` \ es -> trace (tab ++ '/':name ++ ": " ++ show es) (throwError es)
 
-unifying :: (Show a, Eq a, Unifiable a a) => ((a, a) -> Infer b) -> a -> a -> Infer b
+unifying :: (Pretty a, Eq a, Unifiable a a) => ((a, a) -> Infer b) -> a -> a -> Infer b
 unifying u t t' = indentDebug \ tab -> if t == t' then
         u (t, t')
     else
-        trace (tab <> show t <> " ~ " <> show t') $ u (t, t')
+        trace (tab <> prettyShow t <> " ~ " <> prettyShow t') $ u (t, t')

@@ -1,26 +1,28 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Language.Lys.Pretty.Class
-    ( PrettyShow(..)
+    ( PP.Pretty(..)
+    , prettyShow
     , prettyPrint
     , module PP
-    , parensSep, bracesSep, anglesSep
+    , parensSep, bracesSep, bracesParSep, anglesSep
     , dotSep
     , bracesBlock
     ) where
 
 import Text.PrettyPrint.ANSI.Leijen as PP hiding ((<$>), (<>))
 
-class PrettyShow a where
-    prettyShow :: a -> Doc
+prettyShow :: Pretty a => a -> String
+prettyShow = filter (/= '\n') . flip displayS "" . renderCompact . pretty
 
-prettyPrint :: PrettyShow a => a -> IO ()
-prettyPrint x = putDoc (prettyShow x) >> putStrLn ""
+prettyPrint :: Pretty a => a -> IO ()
+prettyPrint x = putDoc (pretty x) >> putStrLn ""
 
-parensSep, bracesSep, anglesSep :: [Doc] -> Doc
-parensSep = encloseSep "(" ")" ", "
-bracesSep = encloseSep "{ " " }" ", "
-anglesSep = encloseSep "<" ">" ", "
+parensSep, bracesSep, bracesParSep, anglesSep :: [Doc] -> Doc
+parensSep    = encloseSep "(" ")" ", "
+bracesSep    = encloseSep "{ " " }" ", "
+bracesParSep = encloseSep "{ " " }" " | "
+anglesSep    = encloseSep "<" ">" ", "
 
 dotSep :: [Doc] -> Doc
 dotSep = cat . punctuate "."
