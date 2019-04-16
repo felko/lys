@@ -12,7 +12,7 @@ The language is an extension of synchronous π-calculus:
 - `P | Q`: execute `P` and `Q` in parallel
 - `new x: t { P }`: create new channel `x` of type `t` in the process `P`
 - `x?(y), P`: read channel `x`, bind the received value to `y` and continue with `P`
-- `x?(y), P`: write on channel `x` the value to `y` and continue with `P`
+- `x!(y), P`: write on channel `x` the value to `y` and continue with `P`
 - `repeat x?(y), P`: persistent read
 - `repeat x!(y), P`: persistent write
 - `x.f!(y), P`: construct `x` with field `f` provided the channel `y`, and continue with `P`
