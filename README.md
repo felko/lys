@@ -1,66 +1,50 @@
 Lys
 ===
 
-A concurrent programming language based on asynchronous π-calculus.
+A concurrent programming language based on typed π-calculus.
 
 ### Syntax
 
-#### Names
-
-| Name 	| Meaning 	| Conditions 	| Type 	|
-|-------------------------	|---------------------------------------	|----------------------------------------	|-------------------------	|
-| `{f: x}` 	| Construct variant-object 	| `x : T` 	| `{f: T \| ...}` 	|
-| `{f1: x1, ..., fn: xn}` 	| Construct record-object 	| `xi : Ti` 	| `{f1: T1, ..., fn: Tn}` 	|
-| `x.f` 	| Get the channel of `x` at field `f` 	| `x : {f : T, ...}` or `x : {f: T \| ...}` 	| `T` 	|
-| ``` `p` ``` 	| Quotes process `p` 	| `p : s` 	| ``` `s` ``` 	|
-
 #### Processes
 
-|Process| Meaning 	| Conditions 	| Session 	|
-|------------------------------	|----------------------------------------------------------------------------------	|--------------------------	|-------------------	|
-| `x?y, p` 	| Receive value on channel `x`, bind it to `y` then executes `p` 	| `x : T, p : s` 	| `x?, hide(y, s)` 	|
-| `x!y` 	| Send channel `y` over channel `x` 	| `x : T, y : T` 	| `x!` 	|
-| `p \| q` 	| Executes `p` and `q` concurrently 	| `p : s1, q : s2`  	| `s1 \| s2` 	|
-| `0` 	| The null process, does nothing 	|  	| `0` 	|
-| `new x: T in p` 	| Defines a new channel `x` of type `T` then runs `p` 	| `p : s` 	| `hide(x, s)` 	|
-| `select x { p1 \| ... \| pn }` 	| Pattern match on `x` by selecting a process among `p1`, ..., `pn` (must be exhaustive)	| `pi : x.fi?, s`	| `x?, s` 	|
-| `init x { p1 \| ... \| pn }` 	| Initializes `x` by writing on all of its fields in processes `p1`, ..., `pn` 	| `pi : x.fi!` | `x!` 	|
-| `match x y { p1 \| ... \| pn }` 	| Syntactic sugar for simultaneous `select x` and `init y` | `pi : x.fi?, y.gi!` | `x?, y!` 	|
-| `proc(x: T) -> s { p }` 	| A process `p` of session `s` parametrized by a channel `x` of type `T` 	| `p : s` 	| `proc(x: T) -> s` 	|
-| `p(a)` 	| Calls a process `p` with argument `x` 	| `a : T, proc(x: T) -> s` 	| `s` 	|
-| `$x` 	| Executes a quoted process `x` 	| ``` x: `s` ``` 	| `s` 	|
+The language is an extension of synchronous π-calculus:
+- `end`: terminated session/inaction
+- `P | Q`: execute `P` and `Q` in parallel
+- `new x: t { P }`: create new channel `x` of type `t` in the process `P`
+- `x?(y), P`: read channel `x`, bind the received value to `y` and continue with `P`
+- `x?(y), P`: write on channel `x` the value to `y` and continue with `P`
+- `repeat x?(y), P`: persistent read
+- `repeat x!(y), P`: persistent write
+- `x.f!(y), P`: construct `x` with field `f` provided the channel `y`, and continue with `P`
+- `match x { f1(x): P1 | … | fn(x): Pn }`: pattern patch over `+`-type
+- `p(x1, …, xn)`: spawn top-level process `p` on channels `x1`, …, `xn`
 
 ### Type system
 
-The type system is divided into two kinds: types (types of channels) and sessions (types of processes)
+The type system used is called πCLL, defined in "Linear logic propositions as session types" — Luis Caires,
+Franck Pfenning and Bernardo Toninho, and corresponds to full intuitionistic linear logic.
 
-#### Types
+The logical connectives and truth values have been modified to be unicode characters
 
-A lys type can be either:
-- a type identifier `Int`, `Float`, `Bool`, `String`
-- a type variable `t`
-- a record
-    - a product type `{ f1: t1, ..., fn: tn }`
-    - a sum type `{ f1: t1 | ... | fn: tn }`
-- a quoted session (acts like a closure)
-
-It features (for now) row-polymorphism and polymorphic variants so records can be extended.
-
-#### Sessions
-
-A session the type a processes, it can depend on channels:
-- `proc(x: T) -> s`: expect an argument `x` of type `T` then behave like a process of session `s`
-- `x?, s`: read channel `x` then behave like `s`
-- `x!`: write on `x`
-- `0`: the unit session
-- `s | s'`: act as `s` and `s'` executed simultaneously
-- `s where t1, ..., tn: Type, s1, ..., sn: Session`: Session scheme
+A type in Lys can be either:
+- a primitive type like `Int`, `Float`, etc...
+- `A | B`: read a value of type `A` and continue with `B` (_par_ or ⅋)
+- `A; B`: write a value of type `A` and continue with `B` (_tensor_ or ⊗)
+- `&{ fi: Ti }`: additive conjunction (_with_ or &)
+- `+{ fi: Ti }`: additive disjunction (_plus_ or ⊕)
+- `!A`: can read multiple times a channel of type `A`s (_of course_)
+- `?A`: can write multiple times on a channel of type `A`
+- `~A`: dual of type `A`
+- `1`: multiplicative truth
+- `⊥`: multiplicative falsity
+- `0`: additive falsity
+- `⊤`: additive truth
 
 ### Roadmap
 
 - [x] Type checking
-- [ ] Type inference
-- [ ] Parser
+- [x] Type inference
+- [x] Parser
 - [ ] Compiler
     - [ ] VM
     - [ ] Code generation

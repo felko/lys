@@ -43,8 +43,8 @@ identT = IdentT <$> upperIdentifier
 appT = AppT <$> appFactor <*> angles (commaSep1 type')
 
 topT, bottomT, oneT, zeroT :: Parser Type
-topT = TopT <$ symbol "~0"
-bottomT = BottomT <$ symbol "~1"
+topT = TopT <$ symbol "⊤"
+bottomT = BottomT <$ symbol "⊥"
 oneT = OneT <$ symbol "1"
 zeroT = OneT <$ symbol "0"
 

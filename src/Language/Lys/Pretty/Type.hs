@@ -32,7 +32,7 @@ instance PrettyShow Type where
         ZeroT -> "0"
         OfCourseT t -> "!" <> subTypeExpr t
         WhyNotT t -> "?" <> subTypeExpr t
-        TensorT a b -> subTypeExpr a <> "*" <+> subTypeExpr b
+        TensorT a b -> subTypeExpr a <> ";" <+> subTypeExpr b
         ParT a b -> subTypeExpr a <+> "|" <+> subTypeExpr b
         PlusT fs -> "+" <> prettyShowFields fs
         WithT fs -> "&" <> prettyShowFields fs
