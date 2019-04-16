@@ -19,6 +19,7 @@ import Control.Monad
 
 import Control.Lens hiding (Context)
 
+import qualified Data.Set as Set
 import qualified Data.Map as Map
 
 instance Checkable Declaration () where
@@ -37,8 +38,9 @@ instance Checkable Declaration () where
                     InferredNP n -> (n,) <$> freshType "A"
                     AnnotatedNP n t -> pure (n, t)
                 fst <$> infer (desugar p :⊢ Context d mempty)
-            let params = flip map np \case
+
+            let typeParams = Set.toList (freeNames Type' ctx)
+                params = flip map np \case
                     InferredNP n -> n
                     AnnotatedNP n _ -> n
             gamma %= introduce n (Scheme typeParams (Scheme params ctx))
-            

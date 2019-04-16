@@ -1,6 +1,7 @@
 {-# LANGUAGE
     FlexibleInstances
   , FlexibleContexts
+  , TypeSynonymInstances
   , ConstrainedClassMethods
   , ConstraintKinds
   , TypeFamilies
@@ -53,6 +54,13 @@ data KindProxy :: * -> * where
     Type'    :: KindProxy Type
     Name'    :: KindProxy Name
     Process' :: KindProxy Process
+    Of'      :: forall a. KindProxy a
+
+class HasVar a where
+    var :: Prism' a String
+
+instance HasVar Type where
+    var = _VarT
 
 -- | A type that can contain free names that can be substituted
 class Contextual a c where
@@ -116,11 +124,26 @@ data Scheme a c = Scheme
     deriving (Show, Functor)
 makeLenses ''Scheme
 
+type InstantiatedProcess = Scheme Name Context
+type TopLevelProcess = Scheme Type InstantiatedProcess
+type Polymorphic c = Scheme Type c
+
+instance Pretty c => Pretty (Scheme a c) where
+    pretty (Scheme vs x) = sep (map string vs) <> "." <+> pretty x
+
+instance Contextual String String where
+    freeNames _ = singleton
+    substitute (Subst m) x = fromMaybe x (Map.lookup x m)
+
+instance Contextual (Scheme Type Type) Type where
+    freeNames p (Scheme tv t) = freeNames p t \\ Set.fromList tv
+    substitute s (Scheme tv t) = Scheme tv (substitute (restrictMany (Set.fromList tv) s) t)
+
 instance Contextual (Scheme Type Context) Name where
     freeNames p (Scheme vs x) = freeNames p x \\ Set.fromList vs
     substitute s (Scheme vs x) = Scheme vs (substitute (restrictMany (Set.fromList vs) s) x)
 
-instance Contextual (Scheme Name Context) Type where
+instance Contextual InstantiatedProcess Type where
     freeNames p (Scheme vs x) = freeNames p x \\ Set.fromList vs
     substitute s (Scheme vs x) = Scheme vs (substitute (restrictMany (Set.fromList vs) s) x)
 
@@ -223,8 +246,8 @@ defaultInferState = InferState
     { _typeVarSupply = 0
     , _depth         = 0 }
 
-type Gamma = Env (Scheme Type (Scheme Name Context))
-type Tau = Env (Scheme Type Type)
+type Gamma = Env TopLevelProcess
+type Tau = Env (Polymorphic Type)
 
 data GlobalEnv = GlobalEnv
     { _gamma :: Gamma
@@ -284,13 +307,13 @@ call ns (Scheme nv t) = do
     let s = Subst (Map.fromList (zip nv ns))
     pure (substitute s t)
 
-instantiate :: Contextual c Type => Scheme Type c -> Infer c
+instantiate :: Contextual c Type => Polymorphic c -> Infer c
 instantiate (Scheme tv t) = do
     ts <- mapM freshType tv
     let s = Subst (Map.fromList (zip tv ts))
     pure (substitute s t)
 
-instantiateCall :: [Name] -> Scheme Type (Scheme Name Context) -> Infer Context
+instantiateCall :: [Name] -> TopLevelProcess -> Infer Context
 instantiateCall ns s = instantiate s >>= call ns
 
 freshType :: String -> Infer Type
@@ -308,15 +331,15 @@ class Unifiable a c => Unified a c where
 unified' :: forall proxy a c. Unified a c => proxy c -> a -> a -> Infer a
 unified' _ x y = fst <$> unified @a @c x y
 
-instance (Show a, Unifiable a c, Substituable c) => Unifiable (Env a) c where
+instance (Pretty a, Unifiable a c, Substituable c) => Unifiable (Env a) c where
     unify e e' = fold <$> sequence (alignWithKey f e e')
         where f k = these (const err) (const err) unify
-              err = throwError1 (TypeError $ "Couldn't unify environments" <+> string (show e) <+> "and" <+> string (show e'))
+              err = throwError1 (TypeError $ "Couldn't unify environments" <+> pretty e <+> "and" <+> pretty e')
 
 unzipEnv :: Env (a, b) -> (Env a, Env b)
 unzipEnv e = (fst <$> e, snd <$> e)
 
-instance (Show a, Unified a c, Substituable c) => Unified (Env a) c where
+instance (Pretty a, Unified a c, Substituable c) => Unified (Env a) c where
     unified e e' = (_2 %~ fold) . unzipEnv <$> sequence (alignWithKey f e e')
         where f _ = these (pure . (,mempty @(Subst c))) (pure . (,mempty)) unified
 

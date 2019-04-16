@@ -22,6 +22,7 @@ data Process
     | SourceP String String Process
     | ContractP String String Process Process
     deriving (Eq, Show)
+makePrisms ''Process
 
 data Constraint
     = NoneC

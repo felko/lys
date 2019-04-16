@@ -1,5 +1,6 @@
 {-# LANGUAGE
     LambdaCase
+  , TupleSections
   , FlexibleInstances
   , TypeFamilies
   , BlockArguments
@@ -195,6 +196,25 @@ instance Unified Context Type where
         (d'', s1) <- unified d d'
         (t'', s2) <- unified t t'
         pure (Context d'' t'', s2 <> s1)
+
+instance Unifiable (Scheme Type Type) Type where
+    unify s@(Scheme vs t) s'@(Scheme vs' t') = do
+        subst <- unify t t'
+        onlyNameSubst subst
+        pure subst
+        where err = throwError1 (TypeError $ "Schemes" <+> pretty s <+> "and" <+> pretty s' <+> "do not unify")
+              onlyNameSubst (Subst s) = Subst . Map.fromList <$> forM (Map.assocs s) \ (n, m) ->
+                flip maybe (pure . (n,)) err (m ^? var)
+
+instance Unified (Scheme Type Type) Type where
+    unified s@(Scheme vs t) s'@(Scheme vs' t') = do
+        (t'', subst) <- unified t t'
+        subst'' <- onlyNameSubst subst
+        let s'' = Scheme (substitute subst'' <$> vs) t''
+        pure (s'', subst)
+        where err = throwError1 (TypeError $ "Schemes" <+> pretty s <+> "and" <+> pretty s' <+> "do not unify")
+              onlyNameSubst (Subst s) = Subst . Map.fromList <$> forM (Map.assocs s) \ (n, m) ->
+                flip maybe (pure . (n,)) err (m ^? var)
 
 data Action
     = OutputA Name Name

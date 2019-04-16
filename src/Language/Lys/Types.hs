@@ -33,6 +33,9 @@ makeLenses ''Branch
 
 type Fields = Map.Map String Type
 
+data PrimType = IntT
+    deriving (Eq, Ord, Show)
+
 data Type
     = TopT | BottomT
     | OneT | ZeroT
@@ -48,6 +51,4 @@ data Type
     | AppT Type [Type]
     | PrimT PrimType
     deriving (Eq, Ord, Show)
-
-data PrimType = IntT
-    deriving (Eq, Ord, Show)
+makePrisms ''Type

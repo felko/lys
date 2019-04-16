@@ -1,0 +1,19 @@
+module Test ()
+
+process p(v) {
+    new u: G { v!(u) }
+}
+
+process s(x) (
+    x?(y), repeat x!(u), repeat y?(z), p(u)
+)
+
+process t(x) {
+    new y {
+        x!(q), { q(y) | r(x) }
+    }
+}
+
+process c() {
+    new x { s(x) | t(x) }
+}
