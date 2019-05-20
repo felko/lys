@@ -4,14 +4,17 @@
   , BlockArguments
   , OverloadedStrings
   , MultiParamTypeClasses
+  , TypeApplications
   #-}
 
 module Language.Lys.TypeChecking.Declaration where
     
 import Language.Lys.TypeChecking.Inference
 import Language.Lys.TypeChecking.Types
-import Language.Lys.Parser.AST
+import Language.Lys.Parser.AST hiding (Process)
 import Language.Lys.Desugar
+import Language.Lys.Core
+import Language.Lys.Types
 import Language.Lys.Types.Env
 import Language.Lys.Types.Context
 
@@ -21,6 +24,8 @@ import Control.Lens hiding (Context)
 
 import qualified Data.Set as Set
 import qualified Data.Map as Map
+
+import Debug.Trace
 
 instance Checkable Declaration () where
     check = \case
@@ -37,10 +42,9 @@ instance Checkable Declaration () where
                 d <- Env . Map.fromList <$> flip traverse np \case
                     InferredNP n -> (n,) <$> freshType "A"
                     AnnotatedNP n t -> pure (n, t)
-                fst <$> infer (desugar p :⊢ Context d mempty)
-
-            let typeParams = Set.toList (freeNames Type' ctx)
-                params = flip map np \case
-                    InferredNP n -> n
-                    AnnotatedNP n _ -> n
+                let p' = rigidify typeParams (desugar p)
+                Context d' t' <- fst <$> infer (p' :⊢ Context d mempty)
+                unify @Context @Type (Context (relax <$> d') (relax <$> t')) (Context d mempty)
+                pure (Context d mempty)
+            let params = map (view npName) np
             gamma %= introduce n (Scheme typeParams (Scheme params ctx))

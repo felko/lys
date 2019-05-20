@@ -28,6 +28,8 @@ parFactor =  braces process
          <|> newP
          <|> matchP
          <|> try callP
+         <|> try sourceP
+         <|> try replicateP
          <|> try inputP
          <|> try outputP
          <|> try injectP
@@ -41,7 +43,7 @@ nilP = NilP <$ keyword "end"
 newP = do
     keyword "new"
     x <- identifier
-    mt <- optional (symbol ":" *> type')
+    mt <- optional (symbol ":" *> lexeme type')
     p <- braces process
     pure (NewP x mt p)
 
@@ -49,16 +51,14 @@ inputP = do
     x <- name
     symbol "?"
     y <- parens identifier
-    symbol ","
-    p <- parFactor
+    p <- (symbol "," *> parFactor) <|> lexeme (pure NilP)
     pure (InputP x y p)
 
 outputP = do
     x <- name
     symbol "!"
     y <- parens name
-    symbol ","
-    p <- parFactor
+    p <- (symbol "," *> parFactor) <|> lexeme (pure NilP)
     pure (OutputP x y p)
 
 replicateP = do
@@ -66,8 +66,7 @@ replicateP = do
     x <- name
     symbol "?"
     y <- parens identifier
-    symbol ","
-    p <- parFactor
+    p <- (symbol "," *> parFactor) <|> lexeme (pure NilP)
     pure (ReplicateP x y p)
 
 injectP = do
@@ -76,7 +75,7 @@ injectP = do
     l <- identifier
     symbol "!"
     y <- parens name <|> pure (LitN OneL)
-    p <- lexeme $ (symbol "," *> parFactor) <|> pure NilP
+    p <- (symbol "," *> parFactor) <|> lexeme (pure NilP)
     pure (InjectP x l y p)
 
 matchP = do

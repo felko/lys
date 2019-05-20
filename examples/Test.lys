@@ -1,18 +1,42 @@
 module Test ()
 
-process p(v) {
-    new u: G { v!(u) }
+-- bcIntBody :: Process
+-- bcIntBody = NewP "tea" (Just $ IdentT "N") (OutputP (VarN "s") (VarN "tea") (NewP "cc" (Just $ IdentT "I") (OutputP (VarN "s") (VarN "cc") (InputP (VarN "s") "r" NilP))))
+
+process p<A, G>(z: A, v: ?G) {
+    repeat v!(w), new u: G { w!(u) }
 }
 
-process s(x) (
-    x?(y), repeat x!(u), repeat y?(z), p(u)
-)
-
-process t(x) {
-    new y {
-        x!(q), { q(y) | r(x) }
-    }
+process s<A, G>(x: !A | ?G) {
+    x?(y), repeat x!(u), repeat y?(z), p(z, x)
 }
+
+process q1<A>(y: A, u: ?A) {
+    repeat u!(v), new w: G { v!(w) }
+}
+
+process q2<A>(y: A, u: ?A) {
+    repeat u!(v), new w: G { v!(w) }
+}
+
+process qp<A>(q: ?(~A)) {
+    repeat q!(qs), { new k1 { qs!(k1), q2(k1, qs) }
+                   | new k2 { qs!(k2), q1(k2, qs) }
+                   }
+}
+
+process r<G>(x: !(~G)) {
+    end
+}
+
+process t<A, G>(x: !(~A); ?(~G)) {
+    new q: A { x!(q), { qp(q) | r(x) } }
+}
+
+{-
+!(&{ left: A, right: B })
+!A; !B
+-}
 
 process c() {
     new x { s(x) | t(x) }

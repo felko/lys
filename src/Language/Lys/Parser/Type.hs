@@ -10,36 +10,50 @@ import Language.Lys.Types
 import Control.Applicative
 import Control.Monad
 
+import Control.Lens hiding (Context)
+
+import Data.Bool (bool)
 import qualified Data.Map as Map
+
+import Control.Monad.Combinators.Expr
 
 import Text.Megaparsec ((<?>))
 import qualified Text.Megaparsec as Mega
 
-type' :: Parser Type
-type' =  try tensorT
-     <|> try parT
-     <|> plusT <|> withT
-     <|> binaryFactor
-     <?> "type"
 
-appFactor, unaryFactor, binaryFactor :: Parser Type
+unary sym f = Prefix (f <$ symbol sym)
+binary sym f = InfixR (f <$ symbol sym)
+
+typeOperators :: [[Operator Parser Type]]
+typeOperators =
+    [ [ unary "?" WhyNotT, unary "!" OfCourseT, unary "~" DualT]
+    , [ binary ";" TensorT, binary "|" ParT ]
+    , [ binary "->" implication
+      , binary "-o" lollipop ]
+    ]
+
+lollipop, implication :: Type -> Type -> Type
+lollipop a b = ParT (DualT a) b
+implication a b = lollipop (OfCourseT a) b
+
+type' :: Parser Type
+type' = makeExprParser (lexeme factor) typeOperators
+
+appFactor, factor :: Parser Type
 
 appFactor =  topT <|> bottomT
          <|> oneT <|> zeroT
-         <|> varT <|> identT
+         <|> identT
+         <|> plusT <|> withT
+         <|> parens type'
          <?> "type"
          
-unaryFactor = try appT <|> appFactor <?> "type"
+factor = try appT <|> appFactor <?> "type"
 
-binaryFactor =  ofCourseT
-            <|> whyNotT
-            <|> dualT
-            <|> unaryFactor
-            <?> "type"
-
-varT, identT, appT :: Parser Type
-varT = VarT <$> identifier
-identT = IdentT <$> upperIdentifier
+identT, appT :: Parser Type
+identT = do
+    i <- upperIdentifier
+    ($ i) . bool IdentT RigidT <$> isRigid i
 appT = AppT <$> appFactor <*> angles (commaSep1 type')
 
 topT, bottomT, oneT, zeroT :: Parser Type
@@ -47,15 +61,6 @@ topT = TopT <$ symbol "⊤"
 bottomT = BottomT <$ symbol "⊥"
 oneT = OneT <$ symbol "1"
 zeroT = OneT <$ symbol "0"
-
-ofCourseT, whyNotT, dualT :: Parser Type
-ofCourseT = symbol "!" >> OfCourseT <$> unaryFactor
-whyNotT = symbol "?" >> WhyNotT <$> unaryFactor
-dualT = symbol "~" >> DualT <$> unaryFactor
-
-tensorT, parT :: Parser Type
-tensorT = foldr1 TensorT <$> binaryFactor `Mega.sepBy1` symbol "*"
-parT = foldr1 ParT <$> binaryFactor `Mega.sepBy1` symbol "|"
 
 plusT, withT :: Parser Type
 plusT = do

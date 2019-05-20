@@ -29,7 +29,10 @@ import Control.Monad.Except
 
 import Data.Function (on)
 import Data.Maybe (fromMaybe)
+import Data.Foldable
 import Data.Functor.Compose
+import Data.These
+import Data.Align.Key
 
 import qualified Data.Set as Set
 import qualified Data.Map as Map
@@ -108,24 +111,74 @@ instance Contextual Process Name where
             Just y -> substitute1 u y p
             Nothing -> SourceP x u (substitute (restrict u s) p)
             
+instance Contextual Process Type where
+    freeNames d = \case
+        NilP             -> mempty
+        ParP         p q -> freeNames d p <> freeNames d q
+        NewP       x t p -> foldMap (freeNames d) t <> freeNames d p
+        OutputP    x y p -> freeNames d p
+        InputP     x y p -> freeNames d p
+        ReplicateP x y p -> freeNames d p
+        InjectP  x f y p -> freeNames d p
+        MatchP     x  bs -> foldMap (freeNames d) bs
+        CallP      p  xs -> mempty
+        SourceP    x u p -> freeNames d p
+
+    substitute s = \case
+        NilP             -> NilP
+        ParP         p q -> ParP (substitute s p) (substitute s q)
+        NewP       x t p -> NewP x (substitute s <$> t) (substitute s p)
+        OutputP    x y p -> OutputP x y (substitute s p)
+        InputP     x y p -> InputP x y (substitute s p)
+        ReplicateP x y p -> ReplicateP x y (substitute s p)
+        InjectP  x f (VarN y) p -> InjectP x f (VarN y) (substitute s p)
+        InjectP  x f (LitN y) p -> InjectP x f (LitN y) (substitute s p)
+        MatchP     x  bs -> MatchP x (substitute s <$> bs)
+        CallP      p  xs -> CallP p xs
+        SourceP    x u p -> SourceP x u (substitute s p)
+
+rigidify :: [String] -> Process -> Process
+rigidify = substitute . Subst . Map.fromList . map \ tv -> (tv, RigidT tv)
+
+relax :: Type -> Type
+relax = \case
+    TopT -> TopT
+    BottomT -> BottomT
+    OneT -> OneT
+    ZeroT -> ZeroT
+    OfCourseT t -> OfCourseT (relax t)
+    WhyNotT t -> WhyNotT (relax t)
+    TensorT a b -> TensorT (relax a) (relax b)
+    ParT a b -> ParT (relax a) (relax b)
+    PlusT fs -> PlusT (relax <$> fs)
+    WithT fs -> WithT (relax <$> fs)
+    VarT n -> VarT n
+    RigidT n -> VarT n
+    IdentT n -> IdentT n
+    DualT t -> DualT (relax t)
+    AppT t ts -> AppT (relax t) (relax <$> ts)
+    PrimT t -> PrimT t
 
 (∆) :: Ord k => Map.Map k v -> Map.Map k v -> Map.Map k v
 m ∆ m' = Map.withoutKeys m (Map.keysSet m') <> Map.withoutKeys m' (Map.keysSet m)
 
 instance Unifiable Type Type where
     unify = unifying \case
-        -- Dual
-        (DualT (DualT t), t') -> unify t t'
-        (DualT t, DualT t') -> unify t t'
-        (DualT t, t') -> unify t (dual t')
-        (t, DualT t') -> unify (dual t) t'
-
         -- Bindings
         (VarT n, VarT n')
             | n == n'   -> pure mempty
             | otherwise -> pure (Subst (Map.singleton n (VarT n')))
         (VarT n, t) -> pure (Subst (Map.singleton n t))
         (t, VarT n) -> pure (Subst (Map.singleton n t))
+
+        -- Duality
+        (DualT (DualT t), t') -> unify t t'
+        (DualT t, DualT t') -> unify t t'
+        (DualT t, t') -> unify t (dual t')
+        (t, DualT t') -> unify (dual t) t'
+
+        -- Rigid type variables
+        (RigidT n, RigidT n') | n == n' -> pure mempty
 
         -- Identifiers
         (IdentT n, IdentT n') | n == n' -> pure mempty
@@ -134,21 +187,22 @@ instance Unifiable Type Type where
 
         -- Generics
         (AppT t ts, AppT t' ts') -> (mconcat .) . (:) <$> unify t t' <*> zipWithM unify ts ts'
+        (AppT (DualT (IdentT n)) ts, t') -> unify (AppT (IdentT n) (map dual ts)) (DualT t')
+        (t, AppT (DualT (IdentT n')) ts') -> unify (DualT t) (AppT (IdentT n') (map dual ts'))
         (AppT (IdentT n) ts, t') -> do
             Scheme tv tx <- lookupTau n
+            let s = Subst (Map.fromList (zip tv ts))
             if length ts == length tv then
-                unify (substitute (Subst (Map.fromList (zip tv ts))) tx) t'
+                unify (substitute s (relax tx)) t'
             else
                 throwError1 (TypeError $ "Type constructor" <+> string n <+> "expected" <+> int (length tv) <+> "arguments, got" <+> int (length ts))
         (t, AppT (IdentT n') ts') -> do
             Scheme tv' tx' <- lookupTau n'
+            let s = Subst (Map.fromList (zip tv' ts'))
             if length ts' == length tv' then
-                unify t (substitute (Subst (Map.fromList (zip tv' ts'))) tx')
+                unify t (substitute s (relax tx'))
             else
                 throwError1 (TypeError $ "Type constructor" <+> string n' <+> "expected" <+> int (length tv') <+> "arguments, got" <+> int (length ts'))
-
-        (AppT (DualT (IdentT n)) ts, t') -> unify (AppT (IdentT n) ts) (DualT t')
-        (t, AppT (DualT (IdentT n')) ts') -> unify (DualT t) (AppT (IdentT n') ts')
 
         -- Units
         (TopT, TopT) -> pure mempty
@@ -163,30 +217,78 @@ instance Unifiable Type Type where
         -- Connectives
         (TensorT a b, TensorT a' b') -> (<>) <$> unify a a' <*> unify b b'
         (ParT a b, ParT a' b') -> (<>) <$> unify a a' <*> unify b b'
-        (t@WithT{}, t'@WithT{}) -> snd <$> unified t t'
-        (t@PlusT{}, t'@PlusT{}) -> snd <$> unified t t'
+        (PlusT fs, PlusT fs') -> unifyFields fs fs'
+        (WithT fs, WithT fs') -> unifyFields fs fs'
 
         -- Primitive types
         (PrimT t, PrimT t') | t == t' -> pure mempty
 
         -- Failure
-        (t, t') -> throwError1 (TypeError $ "Unable to unify types" <+> string (show t) <+> "and" <+> string (show t'))
+        (t, t') -> throwError1 (TypeError $ "Unable to unify types" <+> pretty t <+> "and" <+> pretty t')
+
+unifyFields :: Fields -> Fields -> Infer (Subst Type)
+unifyFields fs fs' = fold <$> sequence (alignWithKey f fs fs')
+    where f k = these (const err) (const err) unify
+          err = throwError1 (TypeError $ "Couldn't unify fields" <+> pretty fs <+> "and" <+> pretty fs')
+
+unifiedFields :: Fields -> Fields -> Infer (Fields, Subst Type)
+unifiedFields fs fs' = (_2 %~ fold) . unzipF <$> sequence (alignWithKey f fs fs')
+    where f _ = these (pure . (,mempty)) (pure . (,mempty)) unified
 
 instance Unified Type Type where
     unified = curry \case
-        (PlusT fs, PlusT fs') -> do
-            let common = Env . flip Map.withoutKeys (Map.keysSet diff)
-                diff = fs ∆ fs'
-            (Env fs'', s) <- (unified `on` common) fs fs'
-            pure (PlusT (fs'' <> diff), s)
-        (WithT fs, WithT fs') -> do
-            let common = Env . flip Map.withoutKeys (Map.keysSet diff)
-                diff = fs ∆ fs'
-            (Env fs'', s) <- (unified `on` common) fs fs'
-            pure (WithT (fs'' <> diff), s)
+        -- Bindings
+        (VarT n, VarT n')
+            | n == n'   -> pure (VarT n, mempty)
+            | otherwise -> pure (VarT n', Subst (Map.singleton n (VarT n')))
+        (VarT n, t) -> pure (t, Subst (Map.singleton n t))
+        (t, VarT n) -> pure (t, Subst (Map.singleton n t))
+
+        -- Rigid type variables
+        (RigidT n, RigidT n') | n == n' -> pure (RigidT n, mempty)
+        (RigidT n, t') -> throwError1 (TypeError $ "Unable to unify types" <+> pretty (RigidT n) <+> "and" <+> pretty t' <+> ", type variable" <+> text n <+> "is rigid")
+        (t, RigidT n') -> throwError1 (TypeError $ "Unable to unify types" <+> pretty (RigidT n') <+> "and" <+> pretty t <+> ", type variable" <+> text n' <+> "is rigid")
+
+        -- Identifiers
+        (IdentT n, IdentT n') | n == n' -> pure (IdentT n, mempty)
+        (IdentT n, t) -> do
+            (_, s) <- flip unified t =<< instantiate =<< lookupTau n
+            pure (IdentT n, s)
+        (t, IdentT n) -> do
+            (_, s) <- unified t =<< instantiate =<< lookupTau n
+            pure (IdentT n, s)
+
+        -- Duality
+        (DualT (DualT t), t') -> unified t t'
+        (DualT t, DualT t') -> (_1 %~ dual) <$> unified t t'
+        (DualT t, t') -> (_1 %~ dual) <$> unified t (dual t')
+        (t, DualT t') -> (_1 %~ dual) <$> unified (dual t) t'
+
+        -- Generics
+        (AppT t ts, AppT t' ts') -> do
+            (t'', s1) <- unified t t'
+            (ts'', s2) <- (_2 %~ mconcat) . unzip <$> zipWithM unified ts ts'
+            pure (AppT t'' ts'', s2 <> s1)
+        (AppT (IdentT n) ts, t') -> do
+            Scheme tv tx <- lookupTau n
+            if length ts == length tv then
+                unified (substitute (Subst (Map.fromList (zip tv ts))) tx) t'
+            else
+                throwError1 (TypeError $ "Type constructor" <+> string n <+> "expected" <+> int (length tv) <+> "arguments, got" <+> int (length ts))
+        (t, AppT (IdentT n') ts') -> do
+            Scheme tv' tx' <- lookupTau n'
+            -- until I have real kind checking
+            if length ts' == length tv' then
+                unified t (substitute (Subst (Map.fromList (zip tv' ts'))) tx')
+            else
+                throwError1 (TypeError $ "Type constructor" <+> string n' <+> "expected" <+> int (length tv') <+> "arguments, got" <+> int (length ts'))
+
+        -- Disjunctions
+        (PlusT fs, PlusT fs') -> (_1 %~ PlusT) <$> unifiedFields fs fs'
+        (WithT fs, WithT fs') -> (_1 %~ WithT) <$> unifiedFields fs fs'
         (t, t') -> do
             s <- unify @Type @Type t t'
-            pure (t, s)
+            pure (substitute s t', s)
 
 instance Unifiable Context Type where
     unify (Context d t) (Context d' t') = (<>) <$> unify d d' <*> unify t t'
@@ -280,9 +382,16 @@ instance Inferable Process where
 
         -- (T⅋)
         InputP (VarN x) y p :⊢ ctx -> rule j "(T⅋)" do
-            (ctx', s) <- infer (p :⊢ ctx)
-            (a, b) <- (,) <$> (lookupDelta y ctx' <|> freshType "A") <*> lookupDelta x ctx'
-            pure (ctx' & delta %~ introduce x (ParT a b) . remove y, s)
+            ab <- lookupDelta x ctx
+            a <- freshType "A"
+            b <- freshType "A"
+            (ab', s1) <- unified @Type @Type ab (ParT a b)
+            (ctx', s2) <- infer (p :⊢ substitute s1 (ctx & delta %~ introduce x b))
+            (a', b') <- (,) <$> (lookupDelta y ctx' <|> freshType "A") <*> lookupDelta x ctx'
+            (a'', s3) <- (unified @Type @Type `on` substitute (s2 <> s1)) a a'
+            (b'', s4) <- (unified @Type @Type `on` substitute (s3 <> s2 <> s1)) b b'
+            -- a <- unified ab (ParT a'' b'')
+            pure (ctx' & delta %~ introduce x (ParT a'' b'') . remove y, s4 <> s3 <> s2 <> s1)
 
         -- (T⊗)
         NewP y ma (OutputP (VarN x) (VarN y') (ParP p q)) :⊢ ctx | y == y' -> rule j "(T⊗)" do
@@ -307,15 +416,16 @@ instance Inferable Process where
             pure (substitute s3 (ctxp <> ctxq), s3 <> s2 <> s1)
 
         -- (Tcopy) + (T⊗)
-        NewP y ma (OutputP (VarN u) (VarN y') p) :⊢ ctx | y == y' -> rule j "(Tcopy)" do
+        NewP y ma (OutputP (VarN u) (VarN y') p) :⊢ ctx | y == y' -> do
             a <- maybe (freshType "A") pure ma
-            (ctxp, s1) <- infer (p :⊢ mempty)
             (<|>)
-                (rule j "(Tcopy)" $ do a' <- lookupTheta u ctxp
+                (rule j "(Tcopy)" $ do (ctxp, s1) <- infer (p :⊢ ctx)
+                                       a' <- lookupTheta u ctxp
                                        s2 <- unify @Type @Type a a'
                                        (ctx', s3) <- unified ctx (ctxp & delta %~ remove y)
                                        pure (ctx' & theta %~ introduce u a, s3 <> s2 <> s1))
-                (rule j "(T⊗)" $ do a' <- lookupDeltaOne u ctxp
+                (rule j "(T⊗)" $ do (ctxp, s1) <- infer (p :⊢ ctx & delta %~ introduce u a)
+                                    a' <- lookupDeltaOne u ctxp
                                     (a'', s2) <- unified @Type @Type a a'
                                     (ctx', s3) <- unified ctx (ctxp & delta %~ remove y)
                                     pure (ctx' & delta %~ introduce u a'', s3 <> s2 <> s1))
@@ -327,18 +437,24 @@ instance Inferable Process where
             (ctxq, s2) <- infer (q :⊢ ctx)
             a' <- lookupDelta x ctxp
             ad <- lookupDelta x ctxq
-            s3 <- unify @Type @Type a a'
-            s4 <- unify @Type @Type (dual a) ad
-            s5 <- unify @Type @Type (dual a') ad
-            let s = mconcat [s1,s2,s3,s4,s5]
+            (a'', s3) <- unified @Type @Type a a'
+            s4 <- unify @Type @Type (dual a'') ad
+            let s = mconcat [s4,s3,s2,s1]
             (ctx', s') <- (unified `on` delta %~ remove x) ctxp ctxq
             pure (ctx', s' <> s)
+
+        -- (Tcomp)
+        -- ParP p q :⊢ ctx -> rule j "(Tcomp)" do
+        --     (ctxp, s1) <- infer (p :⊢ ctx)
+        --     (ctxq, s2) <- infer (q :⊢ ctx)
+        --     (ctx', s3) <- unified ctx (substitute (s2 <> s1) (ctxp <> ctxq))
+        --     pure (ctx', s3 <> s2 <> s1)
 
         -- (T!)
         ReplicateP (VarN x) y q :⊢ ctx -> rule j "(T!)" do
             (ctxq, s1) <- infer (q :⊢ ctx)
             a <- lookupDelta y ctxq
-            (ctx', s2) <- unified ctx (ctxq & delta %~ introduce x (OfCourseT a) . remove y)
+            (ctx', s2) <- (unified `on` substitute s1) ctx (ctxq & delta %~ introduce x (OfCourseT a) . remove y)
             pure (ctx', s2 <> s1)
 
         -- (T⊕)
@@ -348,12 +464,13 @@ instance Inferable Process where
             a <- case ny of
                 LitN l -> pure (inferLiteral l)
                 VarN y -> lookupDelta y ctxp
-            (ab', s2) <- (unified `on` substitute s1) ab (PlusT (Map.singleton l a))
-            (ctx', s3) <- (unified `on` substitute (s2 <> s1)) ctx (ctxp & delta %~ introduce x ab')
+            (ab', s2) <- (unified `on` substitute s1) (PlusT (Map.singleton l a)) ab
+            (ctx', s3) <- (unified `on` substitute (s2 <> s1)) (ctx & delta %~ remove x) (ctxp & delta %~ introduce x ab')
             pure (ctx', s3 <> s2 <> s1)
 
         -- (T&)
         MatchP (VarN x) alts :⊢ ctx -> rule j "(T&)" do
+            t <- lookupDelta x ctx
             (fs, ctxSb) <- unzip <$> forM alts \ (Branch l pat p) -> case pat of
                 WildcardPat -> do
                     (ctxp, s1) <- infer (p :⊢ ctx)
@@ -361,24 +478,31 @@ instance Inferable Process where
                     pure ((l, BottomT), (ctx', s2 <> s1))
                 VarPat y -> do
                     a <- freshType "A"
-                    (ctxp, s1) <- infer (p :⊢ ctx & delta %~ introduce y a)
-                    --a <- lookupDelta x ctxp
-                    b <- lookupDelta y ctxp
-                    (ctx', s2) <- (unified `on` substitute s1) ctx (ctxp & delta %~ remove y . remove x)
-                    pure ((l, b), (ctx', s2 <> s1))
+                    (_, s1) <- unified t (WithT (Map.singleton y a))
+                    (ctxp, s2) <- infer (p :⊢ ctx & delta %~ introduce y (substitute s1 a))
+                    (ctx', s3) <- (unified @Context @Type `on` substitute (s2 <> s1)) ctx (ctxp & delta %~ remove y . remove x)
+                    pure ((l, dual (substitute s1 a)), (ctx', s2 <> s1))
             let go [] (accC, accS) = pure (accC, accS)
                 go ((c,s):css) (accC, accS) = do
                     (accC', s') <- unified c accC
-                    go css (accC', s <> s' <> accS)
-            (_1.delta %~ introduce x (WithT (Map.fromList fs))) <$> go ctxSb (ctx, mempty)
-            -- unified' Type' ctx' (mempty & delta %~ introduce x (WithT (Map.fromList fs)))
+                    go css (accC', s' <> s <> accS)
+            t <- lookupDelta x ctx
+            let t' = WithT (Map.fromList fs)
+            (t'', s) <- unified t t'
+            (ctx'', s') <- (_1.delta %~ introduce x t'') <$> go ctxSb (ctx, s)
+            pure (ctx'', s')
+            -- unified' Type' ctx' (ctx & delta %~ introduce x (WithT (Map.fromList fs)))
 
         -- (T?)
         SourceP x u p :⊢ ctx -> rule j "(T?)" do
-            (ctxp, s1) <- infer (p :⊢ ctx)
-            a <- lookupTheta u ctxp -- <|> pure OneT
-            (ctx', s2) <- (unified `on` substitute s1) (ctx & delta %~ introduce x (WhyNotT a)) (ctxp & theta %~ remove u)
-            pure (ctx', s2 <> s1)
+            a <- lookupDelta x ctx
+            a' <- flip (unified' Type') a . WhyNotT =<< freshType "A"
+            (ctxp, s1) <- infer (p :⊢ ctx & (theta %~ introduce u a') . (delta %~ remove x))
+            a' <- lookupTheta u ctxp -- <|> pure OneT
+            (a'', s2) <- unified a a'
+            (ctx', s3) <- (unified `on` substitute (s2 <> s1) . (delta %~ remove u)) ctx ctxp
+            pure (ctx' & (delta %~ introduce x a'')
+                       . (theta %~ remove u), s3 <> s2 <> s1)
 
         (p :⊢ ctx) -> throwError1 (TypeError $ "Couldn't infer process" <+> string (show (j ^. judged)))
 

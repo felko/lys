@@ -16,4 +16,3 @@ main = head <$> getArgs >>= parseFile >>= \case
             Left errs -> mapM_ prettyPrint errs
             Right (_, e) -> print e
     Left e -> putStrLn e
-

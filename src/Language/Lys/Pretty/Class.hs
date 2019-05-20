@@ -13,7 +13,7 @@ module Language.Lys.Pretty.Class
 import Text.PrettyPrint.ANSI.Leijen as PP hiding ((<$>), (<>))
 
 prettyShow :: Pretty a => a -> String
-prettyShow = filter (/= '\n') . flip displayS "" . renderCompact . pretty
+prettyShow = filter (/= '\n') . flip displayS "" . renderPretty 0.8 maxBound . pretty
 
 prettyPrint :: Pretty a => a -> IO ()
 prettyPrint x = putDoc (pretty x) >> putStrLn ""

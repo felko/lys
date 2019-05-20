@@ -203,8 +203,9 @@ instance Contextual Type Type where
         PlusT fs -> PlusT (substitute s <$> fs)
         WithT fs -> WithT (substitute s <$> fs)
         VarT n -> fromMaybe (VarT n) (Map.lookup n m)
+        RigidT n -> RigidT n
         IdentT n -> IdentT n
-        DualT t -> DualT (substitute (dual <$> s) t)
+        DualT t -> DualT (substitute s t)
         AppT t ts -> AppT (substitute s t) (substitute s <$> ts)
         PrimT t -> PrimT t
 
@@ -224,6 +225,7 @@ instance Dual Type where
         WithT fs -> PlusT (dual <$> fs)
         PrimT t -> DualT (PrimT t)
         VarT n -> DualT (VarT n)
+        RigidT n -> DualT (RigidT n)
         AppT t ts -> AppT (DualT t) ts
         IdentT n -> DualT (IdentT n)
 
@@ -274,6 +276,13 @@ throwError1 = throwError . pure
 runInfer :: Infer a -> GlobalEnv -> Either TypeErrors a
 runInfer (Infer m) env = runExcept (evalStateT (runReaderT m env) defaultInferState)
 
+
+bind :: forall a. (Pretty a, HasVar a, Substituable a) => String -> a -> Infer (Subst a)
+bind n t
+    | has var t = pure mempty
+    | occurs    = throwError1 (TypeError $ "Occurs check fails: Cannot construct infinite type" <+> pretty (VarT n) <+> "~" <+> pretty t)
+    | otherwise = pure (Subst (Map.singleton n t))
+    where occurs    = n `Set.member` freeNames (Of' @a) t
 
 lookupTheta, lookupDelta, lookupDeltaBottom, lookupDeltaOne :: String -> Context -> Infer Type
 lookupTheta x ctx = case lookupEnv x (ctx ^. theta) of
@@ -336,11 +345,11 @@ instance (Pretty a, Unifiable a c, Substituable c) => Unifiable (Env a) c where
         where f k = these (const err) (const err) unify
               err = throwError1 (TypeError $ "Couldn't unify environments" <+> pretty e <+> "and" <+> pretty e')
 
-unzipEnv :: Env (a, b) -> (Env a, Env b)
-unzipEnv e = (fst <$> e, snd <$> e)
+unzipF :: Functor f => f (a, b) -> (f a, f b)
+unzipF e = (fst <$> e, snd <$> e)
 
 instance (Pretty a, Unified a c, Substituable c) => Unified (Env a) c where
-    unified e e' = (_2 %~ fold) . unzipEnv <$> sequence (alignWithKey f e e')
+    unified e e' = (_2 %~ fold) . unzipF <$> sequence (alignWithKey f e e')
         where f _ = these (pure . (,mempty @(Subst c))) (pure . (,mempty)) unified
 
 complete :: Context -> Infer ()

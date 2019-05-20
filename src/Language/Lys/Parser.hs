@@ -13,15 +13,22 @@ import Language.Lys.Parser.Program     (program)
 import Language.Lys.Parser.Declaration (declaration)
 import Language.Lys.Parser.Process     (process)
 import Language.Lys.Parser.Name        (name)
+import Language.Lys.Parser.Type        (type')
 import Language.Lys.Parser.Types
+
+import Control.Monad.State
 
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 
 import qualified Text.Megaparsec as Mega
 
+defaultParserState :: ParserState
+defaultParserState = ParserState
+    { _rigidTypeVars = mempty }
+
 parse :: Parser a -> String -> Text.Text -> Either String a
-parse parser name src = case Mega.parse parser name src of
+parse parser name src = case evalState (Mega.runParserT parser name src) defaultParserState of
     Left bundle -> Left (Mega.errorBundlePretty bundle)
     Right val -> Right val
 

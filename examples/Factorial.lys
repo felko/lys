@@ -1,0 +1,11 @@
+module Factorial ()
+
+process factorial(n: ~Int, acc: ~Int, fact: Int) {
+    new isZero: Bool
+        { match isZero
+            { true:  fact!(acc), end
+            | false: factorial(n, acc, fact)
+            }
+        | isZero.true!(1), end
+        }
+}

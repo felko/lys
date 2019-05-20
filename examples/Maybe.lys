@@ -2,9 +2,9 @@ module Maybe (Maybe, mapId)
 
 import Bidule.Test
 
-type Maybe<a> = +{ just: a, nothing }
+type Maybe<T> = +{ just: T, nothing }
 
-process mapId(mx, my) {
+process mapId<A, B>(f: A -o B, mx: ~(Maybe<A>), my: Maybe<B>) {
     match mx { just(x): my.just!(x)
              | nothing: my.nothing! }
 }

@@ -10,7 +10,7 @@ import Control.Lens
 
 data Pattern
     = VarPat String
-    -- | LitPat Literal
+    | LitPat Literal
     | WildcardPat
     deriving (Eq, Ord, Show)
 
@@ -47,6 +47,7 @@ data Type
     | WithT Fields
     | DualT Type
     | VarT String
+    | RigidT String
     | IdentT String
     | AppT Type [Type]
     | PrimT PrimType

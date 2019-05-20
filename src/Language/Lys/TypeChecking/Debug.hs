@@ -23,7 +23,7 @@ rule :: (Pretty a, Pretty b) => Judgement b -> String -> Infer a -> Infer a
 rule (p :⊢ ctx) name i = indentDebug \ tab ->
     trace (tab ++ name ++ " " ++ prettyShow p ++ "\n\t" ++ tab ++ prettyShow ctx) $
         (i >>= \ x -> trace (tab ++ '/':name ++ " " ++ prettyShow x) $ pure x)
-            `catchError` \ es -> trace (tab ++ '/':name ++ ": " ++ show es) (throwError es)
+            `catchError` \ es -> trace (tab ++ '/':name ++ ": " ++ prettyShow es) (throwError es)
 
 unifying :: (Pretty a, Eq a, Unifiable a a) => ((a, a) -> Infer b) -> a -> a -> Infer b
 unifying u t t' = indentDebug \ tab -> if t == t' then

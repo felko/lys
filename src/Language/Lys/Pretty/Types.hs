@@ -1,4 +1,7 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE
+    FlexibleInstances
+  , OverloadedStrings
+  #-}
 
 module Language.Lys.Pretty.Types () where
 
@@ -29,6 +32,9 @@ instance Pretty a => Pretty (Env a) where
     pretty (Env m)
         | Map.null m = "•"
         | otherwise = cat $ punctuate ", " (map (\ (x, t) -> string x <> ": " <> pretty t) (Map.assocs m))
+
+instance Pretty a => Pretty (Map.Map String a) where
+    pretty m = braces . cat $ punctuate ", " (map (\ (x, t) -> string x <> ": " <> pretty t) (Map.assocs m))
 
 instance Pretty Context where
     pretty (Context d t) = parens ("∆ = " <> pretty d <> "; Θ = " <> pretty t)

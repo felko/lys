@@ -29,14 +29,18 @@ data Constraint
     deriving (Eq, Show)
 
 data TypeParam
-    = ParamTP String
-    | ConstrTP String Constraint
+    = ParamTP { _tpName :: String }
+    | ConstrTP { _tpName :: String, _tpConstr :: Constraint }
     deriving (Eq, Show)
+makeLenses ''TypeParam
+makePrisms ''TypeParam
 
 data NameParam
-    = InferredNP String
-    | AnnotatedNP String Type
+    = InferredNP { _npName :: String }
+    | AnnotatedNP { _npName :: String, _npType :: Type }
     deriving (Eq, Show)
+makeLenses ''NameParam
+makePrisms ''NameParam
 
 type ModuleName = [String]
 

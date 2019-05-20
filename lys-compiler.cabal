@@ -72,6 +72,7 @@ executable lys-compiler
                      , free ==5.*
                      , lens ==4.*
                      , these ==0.8
+                     , time ==1.8.*
                      , keys ==3.12.*
                      , ansi-wl-pprint ==0.6.*
   hs-source-dirs:      src
