@@ -42,9 +42,9 @@ A type in Lys can be either:
 
 ### Roadmap
 
-- [x] Type checking
-- [x] Type inference
 - [x] Parser
+- [ ] Type checking
+- [ ] Type inference
 - [ ] Compiler
     - [ ] VM
     - [ ] Code generation
