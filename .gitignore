@@ -1,7 +1,0 @@
-.stack-work
-.ghc.*
-dist
-dist-newstyle
-ign
-cabal.project.local
-cabal.project.local~
