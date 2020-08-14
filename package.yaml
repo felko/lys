@@ -1,0 +1,104 @@
+name: pion
+version: 0.0.1.0
+github: "felko/pion"
+license: BSD3
+author: "felko"
+maintainer: "baxbaxwalanuksiwe@gmail.com"
+copyright: "2020 felko"
+
+extra-source-files:
+  - README.md
+  - CHANGELOG.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description: Please see the README on GitHub at <https://github.com/felko/pion#readme>
+
+dependencies:
+  # Standard library
+  - base-noprelude >= 4.7 && < 5
+  - relude
+
+  # Types
+  - some
+  - text
+  - vector
+  - containers
+  - unordered-containers
+
+  # Parsing and printing
+  - megaparsec
+  - prettyprinter
+  - prettyprinter-ansi-terminal
+
+  # Other dependencies
+  - mtl
+  - rock
+
+default-extensions:
+  # Syntactic extensions
+  - LambdaCase
+  - BlockArguments
+  - TupleSections
+
+  # Patterns
+  - BangPatterns
+  - PatternSynonyms
+  - RecordWildCards
+
+  # Deriving mechanisms
+  - GeneralizedNewtypeDeriving
+  - DerivingStrategies
+  - DeriveFunctor
+  - DeriveFoldable
+  - DeriveTraversable
+  - DeriveGeneric
+
+  # Types
+  - RankNTypes
+  - ScopedTypeVariables
+  - TypeApplications
+
+  # Overloading
+  - OverloadedStrings
+
+ghc-options:
+  - -Wall
+  - -Wcompat
+  - -Widentities
+  - -Wincomplete-record-updates
+  - -Wincomplete-uni-patterns
+  - -Wmissing-home-modules
+  - -Wpartial-fields
+  - -Wredundant-constraints
+  - -Wtabs
+
+library:
+  source-dirs: src
+
+executables:
+  pion:
+    main: Main.hs
+    source-dirs: app
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+    dependencies:
+      - pion
+
+tests:
+  pion-test:
+    main: Spec.hs
+    source-dirs: test
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+    dependencies:
+      - pion

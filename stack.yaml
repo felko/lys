@@ -1,0 +1,14 @@
+# LTS snapshot
+resolver: lts-16.9
+
+packages:
+  - .
+
+extra-deps:
+  - rock-0.3.0.0
+  - relude-0.7.0.0
+  - base-noprelude-4.13.0.0
+  - constraints-extras-0.3.0.2
+  - dependent-hashmap-0.1.0.1
+  - dependent-sum-0.7.1.0
+  - prettyprinter-1.7.0
