@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 7215bc187aff9ad863989d0088b83ed2cb728db6167bde61079f329c51b51678
+-- hash: 0b196010eb9176b603cb32551fa900082274e78d151757ad0b23d1ea58ee07f2
 
 name:           pion
 version:        0.0.1.0
@@ -30,25 +30,30 @@ library
       Language.Pion
       Language.Pion.Lexer
       Language.Pion.Lexer.Error
-      Language.Pion.Lexer.Span
+      Language.Pion.Lexer.Monad
       Language.Pion.Lexer.Token
       Language.Pion.Lexer.Tokenize
       Language.Pion.Name
       Language.Pion.Orphans
       Language.Pion.Parser
       Language.Pion.Parser.Error
+      Language.Pion.Parser.Expr
+      Language.Pion.Parser.Monad
+      Language.Pion.Parser.Process
+      Language.Pion.SourceSpan
       Language.Pion.Syntax
       Language.Pion.Syntax.Expr
       Language.Pion.Syntax.Pattern
       Language.Pion.Syntax.Process
       Language.Pion.Syntax.Process.Flow
       Language.Pion.Syntax.Type
+      Language.Pion.Type
       Prelude
   other-modules:
       Paths_pion
   hs-source-dirs:
       src
-  default-extensions: LambdaCase BlockArguments TupleSections BangPatterns PatternSynonyms RecordWildCards GeneralizedNewtypeDeriving DerivingStrategies DeriveFunctor DeriveFoldable DeriveTraversable DeriveGeneric FlexibleInstances InstanceSigs FlexibleContexts RankNTypes ScopedTypeVariables TypeApplications GADTs OverloadedStrings
+  default-extensions: LambdaCase BlockArguments TupleSections BangPatterns PatternSynonyms RecordWildCards NamedFieldPuns GeneralizedNewtypeDeriving DerivingStrategies DeriveFunctor DeriveFoldable DeriveTraversable DeriveGeneric FlexibleInstances InstanceSigs FlexibleContexts RankNTypes ScopedTypeVariables TypeApplications GADTs OverloadedStrings
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wtabs
   build-depends:
       base-noprelude >=4.7 && <5
@@ -73,7 +78,7 @@ executable pion
       Paths_pion
   hs-source-dirs:
       app
-  default-extensions: LambdaCase BlockArguments TupleSections BangPatterns PatternSynonyms RecordWildCards GeneralizedNewtypeDeriving DerivingStrategies DeriveFunctor DeriveFoldable DeriveTraversable DeriveGeneric FlexibleInstances InstanceSigs FlexibleContexts RankNTypes ScopedTypeVariables TypeApplications GADTs OverloadedStrings
+  default-extensions: LambdaCase BlockArguments TupleSections BangPatterns PatternSynonyms RecordWildCards NamedFieldPuns GeneralizedNewtypeDeriving DerivingStrategies DeriveFunctor DeriveFoldable DeriveTraversable DeriveGeneric FlexibleInstances InstanceSigs FlexibleContexts RankNTypes ScopedTypeVariables TypeApplications GADTs OverloadedStrings
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wtabs -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base-noprelude >=4.7 && <5
@@ -100,7 +105,7 @@ test-suite pion-test
       Paths_pion
   hs-source-dirs:
       test
-  default-extensions: LambdaCase BlockArguments TupleSections BangPatterns PatternSynonyms RecordWildCards GeneralizedNewtypeDeriving DerivingStrategies DeriveFunctor DeriveFoldable DeriveTraversable DeriveGeneric FlexibleInstances InstanceSigs FlexibleContexts RankNTypes ScopedTypeVariables TypeApplications GADTs OverloadedStrings
+  default-extensions: LambdaCase BlockArguments TupleSections BangPatterns PatternSynonyms RecordWildCards NamedFieldPuns GeneralizedNewtypeDeriving DerivingStrategies DeriveFunctor DeriveFoldable DeriveTraversable DeriveGeneric FlexibleInstances InstanceSigs FlexibleContexts RankNTypes ScopedTypeVariables TypeApplications GADTs OverloadedStrings
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wtabs -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base-noprelude >=4.7 && <5

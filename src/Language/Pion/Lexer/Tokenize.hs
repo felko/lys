@@ -1,103 +1,40 @@
--- | Tokenizer
-module Language.Pion.Lexer.Tokenize where
+-- | Tokenizer.
+module Language.Pion.Lexer.Tokenize (tokenize) where
 
 import qualified Data.HashSet as HashSet
 import Data.Some
 import Language.Pion.Lexer.Error (LexerError (..))
-import Language.Pion.Lexer.Span
+import Language.Pion.Lexer.Monad
 import Language.Pion.Lexer.Token
+import Language.Pion.SourceSpan
+import Language.Pion.Type
 import qualified Text.Megaparsec as Mega
 import qualified Text.Megaparsec.Char as Mega.Char
 import qualified Text.Megaparsec.Char.Lexer as Mega.Lexer
 
-type Lexer a = Mega.Parsec LexerError LText a
-
-lineComment :: Lexer ()
-lineComment = Mega.Lexer.skipLineComment "--"
-
-blockComment :: Lexer ()
-blockComment = Mega.Lexer.skipBlockCommentNested "{-" "-}"
-
-space :: Lexer ()
-space = Mega.Lexer.space Mega.Char.space1 lineComment blockComment
-
-symbol :: Text -> Lexer ()
-symbol sym = Mega.Lexer.symbol space (toLazy sym) $> ()
-
-single :: Char -> Lexer ()
-single ch = Mega.Lexer.lexeme space (Mega.single ch) $> ()
-
+-- | Set of keywords. Used for validating identifiers.
 keywords :: HashSet.HashSet Text
-keywords =
-  HashSet.fromList
-    [ "proc",
-      "func",
-      "type",
-      "module",
-      "import",
-      "extract",
-      "match",
-      "join",
-      "select",
-      "unit",
-      "absurd",
-      "drop",
-      "copy"
-    ]
+keywords = HashSet.fromList $ (keywordText <$> enumerate) ++ ["void", "end"]
 
+-- | Consume a keyword.
 keyword :: Keyword -> Lexer ()
-keyword = \case
-  Proc -> symbol "proc"
-  Func -> symbol "func"
-  Type -> symbol "type"
-  Module -> symbol "module"
-  Import -> symbol "import"
-  Extract -> symbol "extract"
-  Match -> symbol "match"
-  Join -> symbol "join"
-  Select -> symbol "select"
-  Unit -> symbol "unit"
-  Absurd -> symbol "absurd"
-  Drop -> symbol "drop"
-  Copy -> symbol "copy"
+keyword = symbol . keywordText
 
-primType :: PrimType -> Lexer ()
-primType = \case
-  Tensor -> single '⨂'
-  Par -> single '⅋'
-  Plus -> single '⨁'
-  With -> single '&'
-  OfCourse -> single '!'
-  WhyNot -> single '?'
-  Bottom -> single '⊥'
-  Top -> single '⊤'
-  Void -> symbol "void"
-  End -> symbol "end"
-
+-- | Consume a delimiter.
 delimiter :: Delimiter -> DelimiterType -> Lexer ()
-delimiter = curry \case
-  (Opening, Brace) -> single '{'
-  (Closing, Brace) -> single '}'
-  (Opening, Paren) -> single '('
-  (Closing, Paren) -> single ')'
-  (Opening, Brack) -> single '['
-  (Closing, Brack) -> single ']'
-  (Opening, Angle) -> single '⟨'
-  (Closing, Angle) -> single '⟩'
+delimiter delim delimType = symbol (delimiterSymbol delim delimType)
 
+-- | Consume a punctuation symbol.
 punctuation :: Punctuation -> Lexer ()
-punctuation = \case
-  Dot -> single '.'
-  Semicolon -> single ';'
-  Comma -> single ','
-  Colon -> single ':'
-  DoubleColon -> single '∷'
-  Turnstile -> single '⊢'
+punctuation = symbol . punctuationSymbol
 
+-- | Consume a lexeme and return the corresponding parsed data.
 lexeme :: Lexeme a -> Lexer a
-lexeme l = Mega.Lexer.lexeme space $ case l of
+lexeme l = case l of
   Keyword kw -> keyword kw
-  PrimType t -> primType t
+  ConnectiveType c -> symbol (connectiveTypeSymbol c)
+  ModalityType m -> symbol (modalityTypeSymbol m)
+  UnitType u -> symbol (unitTypeSymbol u)
   Delimiter delim delimType -> delimiter delim delimType
   Punctuation p -> punctuation p
   Identifier -> do
@@ -123,20 +60,32 @@ lexeme l = Mega.Lexer.lexeme space $ case l of
         *> Mega.manyTill Mega.Lexer.charLiteral (Mega.Char.char '"')
         <|> Mega.customFailure MalformedStringLiteral
 
-token :: Lexeme a -> Lexer (Token a)
-token tokenLexeme = spanned do
-  tokenData <- lexeme tokenLexeme
-  pure \tokenSpan -> Token {..}
+-- | Consume a lexeme together with source location information.
+token :: Lexeme a -> Lexer (LocatedToken a)
+token tokenLexeme = do
+  startOffset <- getOffset
+  Located {locNode = tokenData, locSpan} <-
+    skipTrailingSpaces $
+      located (lexeme tokenLexeme)
+  stopOffset <- getOffset
+  let tokenLength = stopOffset - startOffset
+  pure . Compose $ Located {locNode = Token {..}, locSpan}
+  where
+    getOffset = Mega.stateOffset <$> Mega.getParserState
 
-someToken :: Some Lexeme -> Lexer (Some Token)
-someToken = traverseSome token
+-- | Consume an existentially quantified token, with location information.
+someToken :: Some Lexeme -> Lexer SomeLocatedToken
+someToken = getCompose . traverseSome (Compose . fmap getCompose . token)
 
-anyToken :: Lexer (Some Token)
+-- | Consume any valid token.
+anyToken :: Lexer SomeLocatedToken
 anyToken =
   Mega.choice . fmap someToken $
     concat
       [ anyLexeme Keyword,
-        anyLexeme PrimType,
+        anyLexeme ConnectiveType,
+        anyLexeme ModalityType,
+        anyLexeme UnitType,
         anyLexeme2 Delimiter,
         anyLexeme Punctuation,
         [ Some Identifier,
@@ -150,5 +99,8 @@ anyToken =
     anyLexeme f = Some . f <$> enumerate
     anyLexeme2 f = (Some .) . f <$> enumerate <*> enumerate
 
+-- | Tokenize the input source into a stream.
 tokenize :: Lexer TokenStream
-tokenize = TokenStream <$> many anyToken
+tokenize = do
+  source <- Mega.stateInput <$> Mega.getParserState
+  TokenStream source <$> many anyToken <* Mega.eof

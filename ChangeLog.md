@@ -1,3 +1,3 @@
-# Changelog for pion
+# Changelog
 
 ## Unreleased changes

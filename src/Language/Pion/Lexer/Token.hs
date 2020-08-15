@@ -1,16 +1,37 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- | Type of tokens and lexemes
 module Language.Pion.Lexer.Token
-  ( DelimiterType (..),
+  ( -- * Delimiters
+    DelimiterType (..),
     Delimiter (..),
+    delimiterSymbol,
+
+    -- * Keywords
     Keyword (..),
-    PrimType (..),
+    keywordText,
+
+    -- * Logical symbols
+    ConnectiveType (..),
+    ModalityType (..),
+    UnitType (..),
+
+    -- * Punctuation
     Punctuation (..),
+    punctuationSymbol,
+
+    -- * Abstract token
     Lexeme (..),
+
+    -- * Concrete token
     Token (..),
+    LocatedToken,
+    SomeLocatedToken,
+
+    -- * Stream of tokens
     TokenStream (..),
   )
 where
@@ -20,20 +41,47 @@ import Data.GADT.Compare.TH
 import Data.GADT.Show
 import Data.GADT.Show.TH
 import Data.List (span)
+import Data.Semigroup (option)
 import Data.Some
+import qualified Data.Text.Lazy as LText
 import Data.Type.Equality
 import GHC.Show
-import Language.Pion.Lexer.Span (SourceSpan)
 import Language.Pion.Orphans ()
+import Language.Pion.SourceSpan
+import Language.Pion.Type
 import qualified Text.Megaparsec as Mega
 import Prelude hiding (show)
 
-data DelimiterType = Brace | Paren | Brack | Angle
+-- | Delimiter type.
+data DelimiterType
+  = -- | @{@ @}@
+    Brace
+  | -- | @(@ @)@
+    Paren
+  | -- | @[@ @]@
+    Brack
+  | -- | @⟨@ @⟩@
+    Angle
   deriving (Eq, Ord, Show, Enum, Bounded)
 
+-- | Whether a delimiter is an opening or a closing one.
 data Delimiter = Opening | Closing
   deriving (Eq, Ord, Show, Enum, Bounded)
 
+-- | Symbols of delimiters.
+delimiterSymbol :: Delimiter -> DelimiterType -> Text
+delimiterSymbol = curry \case
+  (Opening, Brace) -> "{"
+  (Closing, Brace) -> "}"
+  (Opening, Paren) -> "("
+  (Closing, Paren) -> ")"
+  (Opening, Brack) -> "["
+  (Closing, Brack) -> "]"
+  (Opening, Angle) -> "⟨"
+  (Closing, Angle) -> "⟩"
+
+-- | Type of textual keywords – by opposition to reserved symbols.
+-- These are mostly for
 data Keyword
   = Proc
   | Func
@@ -50,19 +98,24 @@ data Keyword
   | Copy
   deriving (Eq, Ord, Show, Enum, Bounded)
 
-data PrimType
-  = Tensor
-  | Par
-  | Plus
-  | With
-  | WhyNot
-  | OfCourse
-  | Bottom
-  | Top
-  | Void
-  | End
-  deriving (Eq, Ord, Show, Enum, Bounded)
+-- | Textual content of a keyword.
+keywordText :: Keyword -> Text
+keywordText = \case
+  Proc -> "proc"
+  Func -> "func"
+  Type -> "type"
+  Module -> "module"
+  Import -> "import"
+  Extract -> "extract"
+  Match -> "match"
+  Join -> "join"
+  Select -> "select"
+  Unit -> "unit"
+  Absurd -> "absurd"
+  Drop -> "drop"
+  Copy -> "copy"
 
+-- | A punctuation lexeme.
 data Punctuation
   = Dot
   | Semicolon
@@ -70,13 +123,30 @@ data Punctuation
   | Comma
   | DoubleColon
   | Turnstile
+  | Lambda
+  | Lollipop
   deriving (Eq, Ord, Show, Enum, Bounded)
 
+punctuationSymbol :: Punctuation -> Text
+punctuationSymbol = \case
+  Dot -> "."
+  Semicolon -> ";"
+  Comma -> ","
+  Colon -> ":"
+  DoubleColon -> "∷"
+  Turnstile -> "⊢"
+  Lambda -> "λ"
+  Lollipop -> "⊸"
+
+-- | Type of lexemes. @Lexeme a@ represents a lexeme
+-- which, when tokenized, holds data of type @a@.
 data Lexeme a where
   -- Keywords
   Keyword :: Keyword -> Lexeme ()
   -- Types
-  PrimType :: PrimType -> Lexeme ()
+  ConnectiveType :: ConnectiveType -> Lexeme ()
+  ModalityType :: ModalityType -> Lexeme ()
+  UnitType :: UnitType -> Lexeme ()
   -- Brackets
   Delimiter :: Delimiter -> DelimiterType -> Lexeme ()
   -- Punctuation
@@ -99,18 +169,23 @@ deriveGEq ''Lexeme
 deriveGCompare ''Lexeme
 deriveGShow ''Lexeme
 
+-- | A concrete token.
 data Token a = Token
-  { tokenLexeme :: !(Lexeme a),
-    tokenData :: !a,
-    tokenSpan :: !SourceSpan
+  { -- | The lexeme of this token
+    tokenLexeme :: !(Lexeme a),
+    -- | The length ofthe token, in characters
+    tokenLength :: Int,
+    -- | The data associated with the token, depending on its lexeme
+    tokenData :: !a
   }
 
 instance GEq Token where
-  geq (Token l d s) (Token l' d' s')
-    | s /= s' = Nothing
-    | otherwise = case (l, l') of
+  geq (Token l _ d) (Token l' _ d') =
+    case (l, l') of
       (Keyword kw, Keyword kw') | kw == kw' -> Just Refl
-      (PrimType t, PrimType t') | t == t' -> Just Refl
+      (ConnectiveType c, ConnectiveType c') | c == c' -> Just Refl
+      (ModalityType m, ModalityType m') | m == m' -> Just Refl
+      (UnitType u, UnitType u') | u == u' -> Just Refl
       (Delimiter delimType delim, Delimiter delimType' delim')
         | delimType == delimType', delim == delim' -> Just Refl
       (Punctuation p, Punctuation p') | p == p' -> Just Refl
@@ -122,12 +197,14 @@ instance GEq Token where
       _ -> Nothing
 
 instance GCompare Token where
-  gcompare (Token l d s) (Token l' d' s') =
-    genericCompare s s' . tokenDataOrdering . gcompare l l'
+  gcompare (Token l _ d) (Token l' _ d') =
+    tokenDataOrdering . gcompare l l'
     where
       tokenDataOrdering = case (l, l') of
         (Keyword kw, Keyword kw') -> genericCompare kw kw'
-        (PrimType t, PrimType t') -> genericCompare t t'
+        (ConnectiveType c, ConnectiveType c') -> genericCompare c c'
+        (ModalityType m, ModalityType m') -> genericCompare m m'
+        (UnitType u, UnitType u') -> genericCompare u u'
         (Delimiter delim delimType, Delimiter delim' delimType') ->
           genericCompare delimType delimType' . genericCompare delim delim'
         (Punctuation p, Punctuation p') -> genericCompare p p'
@@ -145,15 +222,23 @@ instance GCompare Token where
         GT -> GGT
 
 instance GShow Token where
-  gshowsPrec p (Token l d _) = case l of
+  gshowsPrec p (Token l _ d) = case l of
     Keyword kw ->
       showParen (p > 10) $
         showString "Keyword "
           . showsPrec 11 kw
-    PrimType t ->
+    ConnectiveType c ->
       showParen (p > 10) $
-        showString "PrimType "
-          . showsPrec 11 t
+        showString "ConnectiveType "
+          . showsPrec 11 c
+    ModalityType m ->
+      showParen (p > 10) $
+        showString "MocalityType "
+          . showsPrec 11 m
+    UnitType u ->
+      showParen (p > 10) $
+        showString "UnitType "
+          . showsPrec 11 u
     Delimiter delim delimType ->
       showParen (p > 10) $
         showString "Delimiter "
@@ -185,44 +270,108 @@ instance GShow Token where
         showString "StringLiteral "
           . showsPrec 11 d
 
-newtype TokenStream = TokenStream
-  {getTokens :: [Some Token]}
+-- | A stream of tokens
+data TokenStream = TokenStream
+  { -- | The source associated with the stream. This allows
+    -- the parse error to report the offending lines
+    streamSource :: LText,
+    -- | The list of tokens resulting from the lexing.
+    streamTokens :: [SomeLocatedToken]
+  }
 
+-- | A concrete token together with information
+-- about its location in the source file.
+type LocatedToken = Compose Located Token
+
+-- | Existential version of 'LocatedToken'.
+-- Note that the @Some@ wraps around the token instead of @Some (Compose Located Token)@.
+-- This avoids pattern matching on @Some@ if we only want to retrieve the source position.
+type SomeLocatedToken = Located (Some Token)
+
+-- | Helper function for the @Stream@ instance.
+someTokenLength :: SomeLocatedToken -> Int
+someTokenLength Located {..} = case locNode of
+  Some Token {..} -> tokenLength
+
+-- Adapted from <https://markkarpov.com/tutorial/megaparsec.html#working-with-custom-input-streams>
+-- to work on lazy text.
 instance Mega.Stream TokenStream where
-  type Token TokenStream = Some Token
-  type Tokens TokenStream = [Some Token]
+  type Token TokenStream = SomeLocatedToken
+  type Tokens TokenStream = [SomeLocatedToken]
 
-  tokenToChunk :: Proxy TokenStream -> Some Token -> [Some Token]
+  tokenToChunk :: Proxy TokenStream -> SomeLocatedToken -> [SomeLocatedToken]
   tokenToChunk _ = pure
 
-  tokensToChunk :: Proxy TokenStream -> [Some Token] -> [Some Token]
+  tokensToChunk :: Proxy TokenStream -> [SomeLocatedToken] -> [SomeLocatedToken]
   tokensToChunk _ = id
 
-  chunkToTokens :: Proxy TokenStream -> [Some Token] -> [Some Token]
+  chunkToTokens :: Proxy TokenStream -> [SomeLocatedToken] -> [SomeLocatedToken]
   chunkToTokens _ = id
 
-  chunkLength :: Proxy TokenStream -> [Some Token] -> Int
+  chunkLength :: Proxy TokenStream -> [SomeLocatedToken] -> Int
   chunkLength _ = length
 
-  chunkEmpty :: Proxy TokenStream -> [Some Token] -> Bool
+  chunkEmpty :: Proxy TokenStream -> [SomeLocatedToken] -> Bool
   chunkEmpty _ = null
 
-  take1_ :: TokenStream -> Maybe (Some Token, TokenStream)
-  take1_ (TokenStream tokens) = fmap TokenStream <$> uncons tokens
+  take1_ (TokenStream source tokens) = case tokens of
+    [] -> Nothing
+    token : remaining ->
+      let remainingSource = LText.drop (fromIntegral $ someTokenLength token) source
+       in Just (token, TokenStream remainingSource remaining)
 
-  takeN_ :: Int -> TokenStream -> Maybe ([Some Token], TokenStream)
-  takeN_ n (TokenStream tokens)
-    | n <= length tokens = Just $ TokenStream <$> splitAt n tokens
-    | otherwise = Nothing
+  takeN_ :: Int -> TokenStream -> Maybe ([SomeLocatedToken], TokenStream)
+  takeN_ n (TokenStream source tokens)
+    | n <= 0 = Just ([], TokenStream source tokens)
+    | null tokens = Nothing
+    | otherwise =
+      let (consumed, remaining) = splitAt n tokens
+       in case nonEmpty consumed of
+            Nothing -> Just (consumed, TokenStream source remaining)
+            Just nonEmptyConsumed ->
+              let consumedLength = Mega.tokensLength (Proxy @TokenStream) nonEmptyConsumed
+               in Just (consumed, TokenStream (LText.drop (fromIntegral consumedLength) source) remaining)
 
-  takeWhile_ :: (Some Token -> Bool) -> TokenStream -> ([Some Token], TokenStream)
-  takeWhile_ predicate (TokenStream tokens) = TokenStream <$> span predicate tokens
+  takeWhile_ :: (SomeLocatedToken -> Bool) -> TokenStream -> ([SomeLocatedToken], TokenStream)
+  takeWhile_ predicate (TokenStream source tokens) =
+    let (consumed, remaining) = span predicate tokens
+     in case nonEmpty consumed of
+          Nothing -> (consumed, TokenStream source remaining)
+          Just nonEmptyConsumed ->
+            let consumedLength = Mega.tokensLength (Proxy @TokenStream) nonEmptyConsumed
+             in (consumed, TokenStream (LText.drop (fromIntegral consumedLength) source) remaining)
 
-  showTokens :: Proxy TokenStream -> NonEmpty (Some Token) -> String
+  showTokens :: Proxy TokenStream -> NonEmpty SomeLocatedToken -> String
   showTokens _ tokens = intercalate ", " . fmap show $ toList tokens
 
-  tokensLength :: Proxy TokenStream -> NonEmpty (Some Token) -> Int
-  tokensLength _ = length
+  tokensLength :: Proxy TokenStream -> NonEmpty SomeLocatedToken -> Int
+  tokensLength _ = sum . fmap someTokenLength
 
   reachOffset :: Int -> Mega.PosState TokenStream -> (String, Mega.PosState TokenStream)
-  reachOffset offset Mega.PosState {..} = undefined
+  reachOffset offset Mega.PosState {..} =
+    ( prefix <> restOfLine,
+      Mega.PosState
+        { pstateInput = TokenStream postSource postTokens,
+          pstateOffset = max pstateOffset offset,
+          pstateSourcePos = newSourcePos,
+          pstateTabWidth = pstateTabWidth,
+          pstateLinePrefix = prefix
+        }
+    )
+    where
+      sameLine = Mega.sourceLine newSourcePos == Mega.sourceLine pstateSourcePos
+      (preTokens, postTokens) = splitAt (offset - pstateOffset) (streamTokens pstateInput)
+      (preSource, postSource) = LText.splitAt (fromIntegral tokensConsumed) (streamSource pstateInput)
+      newSourcePos =
+        case postTokens of
+          [] -> pstateSourcePos
+          (token : _) -> option pstateSourcePos spanStart (locSpan token)
+      tokensConsumed =
+        case nonEmpty preTokens of
+          Nothing -> 0
+          Just nonEmptyPreTokens -> Mega.tokensLength (Proxy @TokenStream) nonEmptyPreTokens
+      restOfLine = toString (LText.takeWhile (/= '\n') postSource)
+      prefix =
+        if sameLine
+          then pstateLinePrefix <> toString preSource
+          else toString preSource

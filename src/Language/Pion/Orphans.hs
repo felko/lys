@@ -1,9 +1,9 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | Orphan instances
-module Language.Pion.Orphans where
+module Language.Pion.Orphans () where
 
-import Data.GADT.Compare
+import Data.GADT.Compare (GOrdering (..))
 
 instance Category GOrdering where
   id = GEQ
