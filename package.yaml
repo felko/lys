@@ -26,6 +26,8 @@ dependencies:
 
   # Types
   - some
+  - dependent-sum
+  - dependent-sum-template
   - text
   - vector
   - containers
@@ -59,10 +61,16 @@ default-extensions:
   - DeriveTraversable
   - DeriveGeneric
 
+  # Instance
+  - FlexibleInstances
+  - InstanceSigs
+
   # Types
+  - FlexibleContexts
   - RankNTypes
   - ScopedTypeVariables
   - TypeApplications
+  - GADTs
 
   # Overloading
   - OverloadedStrings

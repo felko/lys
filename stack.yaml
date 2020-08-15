@@ -11,4 +11,5 @@ extra-deps:
   - constraints-extras-0.3.0.2
   - dependent-hashmap-0.1.0.1
   - dependent-sum-0.7.1.0
+  - dependent-sum-template-0.1.0.3
   - prettyprinter-1.7.0

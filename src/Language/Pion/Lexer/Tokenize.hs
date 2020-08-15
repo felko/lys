@@ -2,13 +2,15 @@
 module Language.Pion.Lexer.Tokenize where
 
 import qualified Data.HashSet as HashSet
-import Language.Pion.Lexer.Error (TokenError (..))
+import Data.Some
+import Language.Pion.Lexer.Error (LexerError (..))
+import Language.Pion.Lexer.Span
 import Language.Pion.Lexer.Token
 import qualified Text.Megaparsec as Mega
 import qualified Text.Megaparsec.Char as Mega.Char
 import qualified Text.Megaparsec.Char.Lexer as Mega.Lexer
 
-type Lexer a = Mega.Parsec TokenError LText a
+type Lexer a = Mega.Parsec LexerError LText a
 
 lineComment :: Lexer ()
 lineComment = Mega.Lexer.skipLineComment "--"
@@ -19,11 +21,11 @@ blockComment = Mega.Lexer.skipBlockCommentNested "{-" "-}"
 space :: Lexer ()
 space = Mega.Lexer.space Mega.Char.space1 lineComment blockComment
 
-lexeme :: Lexer a -> Lexer a
-lexeme = Mega.Lexer.lexeme space
-
 symbol :: Text -> Lexer ()
 symbol sym = Mega.Lexer.symbol space (toLazy sym) $> ()
+
+single :: Char -> Lexer ()
+single ch = Mega.Lexer.lexeme space (Mega.single ch) $> ()
 
 keywords :: HashSet.HashSet Text
 keywords =
@@ -43,107 +45,110 @@ keywords =
       "copy"
     ]
 
-exactTokenWith :: (t -> Lexer x) -> t -> Token -> Lexer Token
-exactTokenWith lex x token = lexeme $ lex x $> token
+keyword :: Keyword -> Lexer ()
+keyword = \case
+  Proc -> symbol "proc"
+  Func -> symbol "func"
+  Type -> symbol "type"
+  Module -> symbol "module"
+  Import -> symbol "import"
+  Extract -> symbol "extract"
+  Match -> symbol "match"
+  Join -> symbol "join"
+  Select -> symbol "select"
+  Unit -> symbol "unit"
+  Absurd -> symbol "absurd"
+  Drop -> symbol "drop"
+  Copy -> symbol "copy"
 
-exactToken :: Text -> Token -> Lexer Token
-exactToken = exactTokenWith (Mega.chunk . toLazy)
+primType :: PrimType -> Lexer ()
+primType = \case
+  Tensor -> single '⨂'
+  Par -> single '⅋'
+  Plus -> single '⨁'
+  With -> single '&'
+  OfCourse -> single '!'
+  WhyNot -> single '?'
+  Bottom -> single '⊥'
+  Top -> single '⊤'
+  Void -> symbol "void"
+  End -> symbol "end"
 
-exactCharToken :: Char -> Token -> Lexer Token
-exactCharToken = exactTokenWith Mega.single
+delimiter :: Delimiter -> DelimiterType -> Lexer ()
+delimiter = curry \case
+  (Opening, Brace) -> single '{'
+  (Closing, Brace) -> single '}'
+  (Opening, Paren) -> single '('
+  (Closing, Paren) -> single ')'
+  (Opening, Brack) -> single '['
+  (Closing, Brack) -> single ']'
+  (Opening, Angle) -> single '⟨'
+  (Closing, Angle) -> single '⟩'
 
-identifier :: Lexer Text
-identifier = lexeme do
-  ident <-
-    fmap toText $
-      (:)
-        <$> Mega.Char.letterChar
-        <*> many (Mega.Char.alphaNumChar)
-  guard (not $ HashSet.member ident keywords)
-    <|> Mega.customFailure (InvalidIdentifier ident)
-  pure ident
+punctuation :: Punctuation -> Lexer ()
+punctuation = \case
+  Dot -> single '.'
+  Semicolon -> single ';'
+  Comma -> single ','
+  Colon -> single ':'
+  DoubleColon -> single '∷'
+  Turnstile -> single '⊢'
 
-integerLiteral :: Lexer Integer
-integerLiteral = Mega.Lexer.signed empty Mega.Lexer.decimal
-
-floatLiteral :: Lexer Double
-floatLiteral = Mega.Lexer.signed empty Mega.Lexer.float
-
-charLiteral :: Lexer Char
-charLiteral =
-  lexeme $
+lexeme :: Lexeme a -> Lexer a
+lexeme l = Mega.Lexer.lexeme space $ case l of
+  Keyword kw -> keyword kw
+  PrimType t -> primType t
+  Delimiter delim delimType -> delimiter delim delimType
+  Punctuation p -> punctuation p
+  Identifier -> do
+    ident <-
+      fmap toText $
+        (:)
+          <$> Mega.Char.letterChar
+          <*> many (Mega.Char.alphaNumChar)
+    guard (not $ HashSet.member ident keywords)
+      <|> Mega.customFailure (InvalidIdentifier ident)
+    pure ident
+  IntegerLiteral -> Mega.Lexer.signed empty Mega.Lexer.decimal
+  FloatLiteral -> Mega.Lexer.signed empty Mega.Lexer.float
+  CharLiteral ->
     Mega.between
       (Mega.Char.char '\'')
       (Mega.Char.char '\'')
       Mega.Lexer.charLiteral
       <|> Mega.customFailure MalformedCharLiteral
+  StringLiteral ->
+    fmap toText $
+      Mega.Char.char '"'
+        *> Mega.manyTill Mega.Lexer.charLiteral (Mega.Char.char '"')
+        <|> Mega.customFailure MalformedStringLiteral
 
-stringLiteral :: Lexer Text
-stringLiteral =
-  lexeme . fmap toText $
-    Mega.Char.char '"'
-      *> Mega.manyTill Mega.Lexer.charLiteral (Mega.Char.char '"')
-      <|> Mega.customFailure MalformedStringLiteral
+token :: Lexeme a -> Lexer (Token a)
+token tokenLexeme = spanned do
+  tokenData <- lexeme tokenLexeme
+  pure \tokenSpan -> Token {..}
 
-tokenize :: Lexer [Token]
-tokenize = many token
-  where
-    token =
-      keywordToken
-        <|> punctuationToken
-        <|> identifierToken
-        <|> literalToken
-        <|> Mega.customFailure UnknownToken
-    keywordToken =
-      Mega.choice $
-        uncurry exactToken
-          <$> [ ("proc", Proc),
-                ("func", Func),
-                ("type", Type),
-                ("module", Module),
-                ("import", Import),
-                ("extract", Extract),
-                ("match", Match),
-                ("join", Join),
-                ("select", Select),
-                ("unit", Unit),
-                ("absurd", Absurd),
-                ("drop", Drop),
-                ("copy", Copy)
-              ]
-    punctuationToken =
-      Mega.choice $
-        uncurry exactCharToken
-          <$> [ ('{', LeftBrace),
-                ('}', RightBrace),
-                ('(', LeftParen),
-                (')', RightParen),
-                ('[', LeftBrack),
-                (']', RightBrack),
-                ('⟨', LeftAngle),
-                ('⟩', LeftAngle),
-                ('.', Dot),
-                (';', Semicolon),
-                (':', Colon),
-                (',', Comma),
-                ('∷', DoubleColon),
-                ('⊢', Turnstile),
-                ('⨂', Tensor),
-                ('⅋', Par),
-                ('⨁', Plus),
-                ('&', With),
-                ('!', OfCourse),
-                ('?', WhyNot),
-                ('⊥', Bottom),
-                ('⊤', Top),
-                ('0', Zero),
-                ('1', One)
-              ]
-    identifierToken = Identifier <$> identifier
-    literalToken =
-      Mega.choice
-        [ IntegerLiteral <$> integerLiteral,
-          FloatLiteral <$> floatLiteral,
-          CharLiteral <$> charLiteral,
-          StringLiteral <$> stringLiteral
+someToken :: Some Lexeme -> Lexer (Some Token)
+someToken = traverseSome token
+
+anyToken :: Lexer (Some Token)
+anyToken =
+  Mega.choice . fmap someToken $
+    concat
+      [ anyLexeme Keyword,
+        anyLexeme PrimType,
+        anyLexeme2 Delimiter,
+        anyLexeme Punctuation,
+        [ Some Identifier,
+          Some IntegerLiteral,
+          Some FloatLiteral,
+          Some CharLiteral,
+          Some StringLiteral
         ]
+      ]
+  where
+    anyLexeme f = Some . f <$> enumerate
+    anyLexeme2 f = (Some .) . f <$> enumerate <*> enumerate
+
+tokenize :: Lexer TokenStream
+tokenize = TokenStream <$> many anyToken

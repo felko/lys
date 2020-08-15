@@ -1,11 +1,9 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 
 -- | Syntax of processes
 module Language.Pion.Syntax.Process where
 
-import Data.HashMap.Strict (HashMap)
 import Data.Some
 import Language.Pion.Name
 import Language.Pion.Syntax.Expr

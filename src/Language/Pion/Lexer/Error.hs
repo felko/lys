@@ -1,6 +1,9 @@
 -- | Lexer errors
-module Language.Pion.Lexer.Error (LexerError(..),
-                                  TokenError(..), tokenErrorBundleToLexerError) where
+module Language.Pion.Lexer.Error
+  ( LexerError(..),
+    LexerErrorRepr,
+    reprLexerErrorBundle,
+  ) where
 
 import Prettyprinter
 import Prettyprinter.Render.Terminal (AnsiStyle(..))
@@ -11,16 +14,18 @@ import qualified Text.Megaparsec.Error as Mega
 
 import qualified Data.Text.Lazy as LText
 
-newtype LexerError = LexerError { getLexerError :: Doc AnsiStyle }
+-- | Type of pretty printed lexer errors
+type LexerErrorRepr = Doc AnsiStyle
 
-data TokenError
+-- | A single lexer error, raised when encoutering an invalid token
+data LexerError
   = InvalidIdentifier Text
   | MalformedCharLiteral
   | MalformedStringLiteral
   | UnknownToken
   deriving (Eq, Ord, Show)
 
-instance Mega.ShowErrorComponent TokenError where
+instance Mega.ShowErrorComponent LexerError where
   showErrorComponent = \case
     InvalidIdentifier t -> "Invalid identifier: `" <> toString t <> "' is a keyword"
     MalformedCharLiteral -> "Malformed character literal"
@@ -29,14 +34,14 @@ instance Mega.ShowErrorComponent TokenError where
 
 -- | An adaptation of <https://hackage.haskell.org/package/megaparsec-8.0.0/docs/src/Text.Megaparsec.Error.html#errorBundlePretty>
 -- to handle ANSI-annotated docs.
-tokenErrorBundleToLexerError
-  :: Mega.ParseErrorBundle LText TokenError -- ^ Parse error bundle to display
-  -> LexerError                             -- ^ Textual rendition of the bundle
-tokenErrorBundleToLexerError Mega.ParseErrorBundle {..} =
+reprLexerErrorBundle
+  :: Mega.ParseErrorBundle LText LexerError -- ^ Parse error bundle to display
+  -> LexerErrorRepr                         -- ^ Textual rendition of the bundle
+reprLexerErrorBundle Mega.ParseErrorBundle {..} =
   let (r, _) = foldl' f (id, bundlePosState) bundleErrors
-  in LexerError (r "")
+  in r ""
   where
-    errorFancyLength :: Mega.ErrorFancy TokenError -> Int
+    errorFancyLength :: Mega.ErrorFancy LexerError -> Int
     errorFancyLength = \case
       Mega.ErrorCustom a -> Mega.errorComponentLen a
       _             -> 1
@@ -45,7 +50,7 @@ tokenErrorBundleToLexerError Mega.ParseErrorBundle {..} =
       Mega.Tokens ts -> Mega.tokensLength (Proxy @LText) ts
       _         -> 1
     f :: (Doc AnsiStyle -> Doc AnsiStyle, Mega.PosState LText)
-      -> Mega.ParseError LText TokenError
+      -> Mega.ParseError LText LexerError
       -> (Doc AnsiStyle -> Doc AnsiStyle, Mega.PosState LText)
     f (o, !pst) e = (o . (outChunk <>), pst')
       where

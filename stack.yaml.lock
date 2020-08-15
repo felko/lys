@@ -47,6 +47,13 @@ packages:
   original:
     hackage: dependent-sum-0.7.1.0
 - completed:
+    hackage: dependent-sum-template-0.1.0.3@sha256:0bbbacdfbd3abf2a15aaf0cf2c27e5bdd159b519441fec39e1e6f2f54424adde,1682
+    pantry-tree:
+      size: 436
+      sha256: 32eeadeb991a290a1da41ce7e995dee7d38ebba3bd3e53ea8074c32c086701fd
+  original:
+    hackage: dependent-sum-template-0.1.0.3
+- completed:
     hackage: prettyprinter-1.7.0@sha256:6a9569e21fa61163a7f066d23d701e23e917893e8f39733d6e617ec72787ae5f,6007
     pantry-tree:
       size: 3194

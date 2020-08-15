@@ -1,6 +1,15 @@
 module Main where
 
-import Lib
+import Control.Monad.Except
+import Language.Pion.Lexer
+import Language.Pion.Parser
+import System.Environment
+import qualified Text.Megaparsec as Mega
 
 main :: IO ()
-main = someFunc
+main = do
+  [s] <- getArgs
+  let result = runExcept do
+        tokens <- lex "(input)" $ toLText s
+        parse test "(input)" tokens
+  print result
