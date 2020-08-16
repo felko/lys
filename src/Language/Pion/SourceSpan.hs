@@ -11,6 +11,7 @@ where
 import Data.Functor.Classes
 import GHC.Generics
 import Generic.Data (Generically1 (..))
+import Prettyprinter
 import qualified Text.Megaparsec.Pos as Mega
 
 -- | A position interval in a source file.
@@ -44,3 +45,6 @@ instance Ord1 Located where
 instance Applicative Located where
   pure x = Located x mempty
   Located f fSpan <*> Located x xSpan = Located (f x) (fSpan <> xSpan)
+
+instance Pretty a => Pretty (Located a) where
+  pretty = pretty . locNode

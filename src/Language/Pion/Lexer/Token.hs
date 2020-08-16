@@ -35,6 +35,7 @@ module Language.Pion.Lexer.Token
   )
 where
 
+import qualified Data.Char as Char (toUpper)
 import Data.Functor.Classes
 import Data.GADT.Compare
 import Data.GADT.Compare.TH
@@ -43,14 +44,15 @@ import Data.GADT.Show.TH
 import Data.List (span)
 import Data.Semigroup (option)
 import Data.Some
-import qualified Data.Text.Lazy as LText
+import qualified Data.Text as Text (toUpper)
+import qualified Data.Text.Lazy as LText (drop, splitAt, takeWhile)
 import Data.Type.Equality
-import GHC.Show
+import GHC.Show (showChar, showParen, showString, showsPrec)
 import Language.Pion.Orphans ()
+import Language.Pion.Pretty
 import Language.Pion.SourceSpan
 import Language.Pion.Type
 import qualified Text.Megaparsec as Mega
-import Prelude hiding (show)
 
 -- | Delimiter type.
 data DelimiterType
@@ -244,7 +246,7 @@ instance GShow Token where
           . showsPrec 11 c
     ModalityType m ->
       showParen (p > 10) $
-        showString "MocalityType "
+        showString "ModalityType "
           . showsPrec 11 m
     UnitType u ->
       showParen (p > 10) $
@@ -280,6 +282,29 @@ instance GShow Token where
       showParen (p > 10) $
         showString "StringLiteral "
           . showsPrec 11 d
+
+instance Pretty (Token a) where
+  pretty :: forall ann. Token a -> Doc ann
+  pretty Token {..} = case tokenLexeme of
+    Keyword kw -> prettyUpperText (keywordText kw)
+    ConnectiveType c -> prettyUpperShow c
+    ModalityType m -> prettyUpperShow m
+    UnitType u -> prettyUpperShow u
+    Delimiter delim delimType ->
+      let prefix = case delim of
+            Opening -> "L"
+            Closing -> "R"
+       in prefix <> prettyUpperShow delimType
+    Punctuation p -> prettyUpperShow p
+    Identifier -> "IDENTIFIER" <> parens (pretty tokenData)
+    IntegerLiteral -> "INTEGER" <> parens (pretty tokenData)
+    FloatLiteral -> "FLOAT" <> parens (pretty tokenData)
+    CharLiteral -> "CHAR" <> parens (prettyCharLiteral tokenData)
+    StringLiteral -> "STRING" <> parens (prettyStringLiteral tokenData)
+    where
+      prettyUpperText = pretty . Text.toUpper
+      prettyUpperShow :: forall b. Show b => b -> Doc ann
+      prettyUpperShow = pretty . map Char.toUpper . show
 
 -- | A stream of tokens
 data TokenStream = TokenStream
@@ -386,3 +411,10 @@ instance Mega.Stream TokenStream where
         if sameLine
           then pstateLinePrefix <> toString preSource
           else toString preSource
+
+instance Pretty TokenStream where
+  pretty :: forall ann. TokenStream -> Doc ann
+  pretty TokenStream {..} = hsep $ prettyToken <$> streamTokens
+    where
+      prettyToken :: SomeLocatedToken -> Doc ann
+      prettyToken Located {..} = foldSome pretty locNode

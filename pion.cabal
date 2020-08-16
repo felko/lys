@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 50e72315026bde7fe4afdc10c5c625ee2c5ef930ea74da351e099470b59c5b18
+-- hash: 4c226d6dcff48e2ffac17bafd8d08a1de7d6e4d9c2616bac9d43e4abf16dc2d4
 
 name:           pion
 version:        0.0.1.0
@@ -42,6 +42,7 @@ library
       Language.Pion.Parser.Monad
       Language.Pion.Parser.Pattern
       Language.Pion.Parser.Process
+      Language.Pion.Pretty
       Language.Pion.SourceSpan
       Language.Pion.Syntax
       Language.Pion.Syntax.Expr
