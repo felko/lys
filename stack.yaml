@@ -13,3 +13,6 @@ extra-deps:
   - dependent-sum-0.7.1.0
   - dependent-sum-template-0.1.0.3
   - prettyprinter-1.7.0
+  - QuickCheck-2.14.1
+  - random-1.2.0
+  - splitmix-0.1.0.1

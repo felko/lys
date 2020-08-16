@@ -20,11 +20,14 @@ dependencies:
   # Types
   - some
   - dependent-sum
-  - dependent-sum-template
   - text
   - vector
   - containers
   - unordered-containers
+
+  # Generics
+  - dependent-sum-template
+  - generic-data
 
   # Parsing and printing
   - megaparsec
@@ -51,11 +54,13 @@ default-extensions:
 
   # Deriving mechanisms
   - GeneralizedNewtypeDeriving
+  - StandaloneDeriving
   - DerivingStrategies
+  - DerivingVia
+  - DeriveGeneric
   - DeriveFunctor
   - DeriveFoldable
   - DeriveTraversable
-  - DeriveGeneric
 
   # Instance
   - FlexibleInstances
@@ -106,3 +111,6 @@ tests:
       - -with-rtsopts=-N
     dependencies:
       - pion
+      - QuickCheck
+      - hspec
+      - hspec-megaparsec

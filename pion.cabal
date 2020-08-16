@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 0b196010eb9176b603cb32551fa900082274e78d151757ad0b23d1ea58ee07f2
+-- hash: 675ed710389bb886b7ad236ff341702b62e6ba6ee07be7672d72fd4d3f87d9ea
 
 name:           pion
 version:        0.0.1.0
@@ -39,6 +39,7 @@ library
       Language.Pion.Parser.Error
       Language.Pion.Parser.Expr
       Language.Pion.Parser.Monad
+      Language.Pion.Parser.Pattern
       Language.Pion.Parser.Process
       Language.Pion.SourceSpan
       Language.Pion.Syntax
@@ -53,13 +54,14 @@ library
       Paths_pion
   hs-source-dirs:
       src
-  default-extensions: LambdaCase BlockArguments TupleSections BangPatterns PatternSynonyms RecordWildCards NamedFieldPuns GeneralizedNewtypeDeriving DerivingStrategies DeriveFunctor DeriveFoldable DeriveTraversable DeriveGeneric FlexibleInstances InstanceSigs FlexibleContexts RankNTypes ScopedTypeVariables TypeApplications GADTs OverloadedStrings
+  default-extensions: LambdaCase BlockArguments TupleSections BangPatterns PatternSynonyms RecordWildCards NamedFieldPuns GeneralizedNewtypeDeriving StandaloneDeriving DerivingStrategies DerivingVia DeriveGeneric DeriveFunctor DeriveFoldable DeriveTraversable FlexibleInstances InstanceSigs FlexibleContexts RankNTypes ScopedTypeVariables TypeApplications GADTs OverloadedStrings
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wtabs
   build-depends:
       base-noprelude >=4.7 && <5
     , containers
     , dependent-sum
     , dependent-sum-template
+    , generic-data
     , megaparsec
     , mtl
     , prettyprinter
@@ -78,13 +80,14 @@ executable pion
       Paths_pion
   hs-source-dirs:
       app
-  default-extensions: LambdaCase BlockArguments TupleSections BangPatterns PatternSynonyms RecordWildCards NamedFieldPuns GeneralizedNewtypeDeriving DerivingStrategies DeriveFunctor DeriveFoldable DeriveTraversable DeriveGeneric FlexibleInstances InstanceSigs FlexibleContexts RankNTypes ScopedTypeVariables TypeApplications GADTs OverloadedStrings
+  default-extensions: LambdaCase BlockArguments TupleSections BangPatterns PatternSynonyms RecordWildCards NamedFieldPuns GeneralizedNewtypeDeriving StandaloneDeriving DerivingStrategies DerivingVia DeriveGeneric DeriveFunctor DeriveFoldable DeriveTraversable FlexibleInstances InstanceSigs FlexibleContexts RankNTypes ScopedTypeVariables TypeApplications GADTs OverloadedStrings
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wtabs -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base-noprelude >=4.7 && <5
     , containers
     , dependent-sum
     , dependent-sum-template
+    , generic-data
     , megaparsec
     , mtl
     , pion
@@ -102,16 +105,22 @@ test-suite pion-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      Language.Pion.LexerSpec
+      Language.Pion.ParserSpec
       Paths_pion
   hs-source-dirs:
       test
-  default-extensions: LambdaCase BlockArguments TupleSections BangPatterns PatternSynonyms RecordWildCards NamedFieldPuns GeneralizedNewtypeDeriving DerivingStrategies DeriveFunctor DeriveFoldable DeriveTraversable DeriveGeneric FlexibleInstances InstanceSigs FlexibleContexts RankNTypes ScopedTypeVariables TypeApplications GADTs OverloadedStrings
+  default-extensions: LambdaCase BlockArguments TupleSections BangPatterns PatternSynonyms RecordWildCards NamedFieldPuns GeneralizedNewtypeDeriving StandaloneDeriving DerivingStrategies DerivingVia DeriveGeneric DeriveFunctor DeriveFoldable DeriveTraversable FlexibleInstances InstanceSigs FlexibleContexts RankNTypes ScopedTypeVariables TypeApplications GADTs OverloadedStrings
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wtabs -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base-noprelude >=4.7 && <5
+      QuickCheck
+    , base-noprelude >=4.7 && <5
     , containers
     , dependent-sum
     , dependent-sum-template
+    , generic-data
+    , hspec
+    , hspec-megaparsec
     , megaparsec
     , mtl
     , pion

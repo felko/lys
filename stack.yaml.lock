@@ -60,6 +60,27 @@ packages:
       sha256: d22f820a1f63497f7fd7e1f04b7d356d92de35582258f6ad55428c88b09e63ff
   original:
     hackage: prettyprinter-1.7.0
+- completed:
+    hackage: QuickCheck-2.14.1@sha256:01e46d7b0a8d3148288ec977625f62d5516ebb5031a50c63f0453863301b4a79,7736
+    pantry-tree:
+      size: 2315
+      sha256: 21961d0875fc156cdd97110a6fb277f37aa31faa3c7910895f84c82630e7ba46
+  original:
+    hackage: QuickCheck-2.14.1
+- completed:
+    hackage: random-1.2.0@sha256:5ca8674e95c46c7eb90f520c26aea22d403625c97697275434afba66ebd32b05,5897
+    pantry-tree:
+      size: 1259
+      sha256: 8ba46c3d6b1cd0d4a4ee472922497f8d0778a1aaf7bbcac328a0b06b4d153309
+  original:
+    hackage: random-1.2.0
+- completed:
+    hackage: splitmix-0.1.0.1@sha256:22f9662e7e8b173421872241edd39350078a9ed4bb9e9f503948c5b483c79276,5253
+    pantry-tree:
+      size: 1149
+      sha256: b9a0c60e2d4786bbb276ce6606027a99615bf703fa3e0f01911e8c6a656c5161
+  original:
+    hackage: splitmix-0.1.0.1
 snapshots:
 - completed:
     size: 532380

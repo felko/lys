@@ -1,3 +1,5 @@
+{-# LANGUAGE TemplateHaskell #-}
+
 -- | Intervals of source positions
 module Language.Pion.SourceSpan
   ( -- * Source interval
@@ -6,25 +8,38 @@ module Language.Pion.SourceSpan
   )
 where
 
+import Data.Functor.Classes
+import GHC.Generics
+import Generic.Data (Generically1 (..))
 import qualified Text.Megaparsec.Pos as Mega
 
 -- | A position interval in a source file.
 data SourceSpan = SourceSpan
   { spanStart :: !Mega.SourcePos,
-    spanStop :: !Mega.SourcePos
+    spanEnd :: !Mega.SourcePos
   }
   deriving (Eq, Ord, Show)
 
 instance Semigroup SourceSpan where
-  SourceSpan start stop <> SourceSpan start' stop' =
-    SourceSpan (min start start') (max stop stop')
+  SourceSpan start end <> SourceSpan start' end' =
+    SourceSpan (min start start') (max end end')
 
 -- | An item together with optional source location information
 data Located a = Located
   { locNode :: a,
     locSpan :: !(Option SourceSpan)
   }
-  deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
+  deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
+  deriving (Generic1)
+  deriving (Show1) via (Generically1 Located)
+
+instance Eq1 Located where
+  liftEq eq (Located node span) (Located node' span') =
+    (node `eq` node') && (span == span')
+
+instance Ord1 Located where
+  liftCompare cmp (Located node span) (Located node' span') =
+    (node `cmp` node') <> (span `compare` span')
 
 instance Applicative Located where
   pure x = Located x mempty

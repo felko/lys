@@ -1,5 +1,17 @@
 -- | Tokenizer.
-module Language.Pion.Lexer.Tokenize (tokenize) where
+module Language.Pion.Lexer.Tokenize
+  ( keywords,
+    keyword,
+    delimiter,
+    punctuation,
+    lexeme,
+    allLexemes,
+    token,
+    someToken,
+    anyToken,
+    tokenize,
+  )
+where
 
 import qualified Data.HashSet as HashSet
 import Data.Some
@@ -46,8 +58,8 @@ lexeme l = case l of
     guard (not $ HashSet.member ident keywords)
       <|> Mega.customFailure (InvalidIdentifier ident)
     pure ident
-  IntegerLiteral -> Mega.Lexer.signed empty Mega.Lexer.decimal
-  FloatLiteral -> Mega.Lexer.signed empty Mega.Lexer.float
+  IntegerLiteral -> Mega.Lexer.signed space Mega.Lexer.decimal
+  FloatLiteral -> Mega.Lexer.signed space Mega.Lexer.float
   CharLiteral ->
     Mega.between
       (Mega.Char.char '\'')
@@ -67,8 +79,8 @@ token tokenLexeme = do
   Located {locNode = tokenData, locSpan} <-
     skipTrailingSpaces $
       located (lexeme tokenLexeme)
-  stopOffset <- getOffset
-  let tokenLength = stopOffset - startOffset
+  endOffset <- getOffset
+  let tokenLength = endOffset - startOffset
   pure . Compose $ Located {locNode = Token {..}, locSpan}
   where
     getOffset = Mega.stateOffset <$> Mega.getParserState
@@ -77,27 +89,30 @@ token tokenLexeme = do
 someToken :: Some Lexeme -> Lexer SomeLocatedToken
 someToken = getCompose . traverseSome (Compose . fmap getCompose . token)
 
--- | Consume any valid token.
-anyToken :: Lexer SomeLocatedToken
-anyToken =
-  Mega.choice . fmap someToken $
-    concat
-      [ anyLexeme Keyword,
-        anyLexeme ConnectiveType,
-        anyLexeme ModalityType,
-        anyLexeme UnitType,
-        anyLexeme2 Delimiter,
-        anyLexeme Punctuation,
-        [ Some Identifier,
-          Some IntegerLiteral,
-          Some FloatLiteral,
-          Some CharLiteral,
-          Some StringLiteral
-        ]
+-- | Enumerate all possible lexemes.
+allLexemes :: [Some Lexeme]
+allLexemes =
+  concat
+    [ anyLexeme Keyword,
+      anyLexeme ConnectiveType,
+      anyLexeme ModalityType,
+      anyLexeme UnitType,
+      anyLexeme2 Delimiter,
+      anyLexeme Punctuation,
+      [ Some Identifier,
+        Some IntegerLiteral,
+        Some FloatLiteral,
+        Some CharLiteral,
+        Some StringLiteral
       ]
+    ]
   where
     anyLexeme f = Some . f <$> enumerate
     anyLexeme2 f = (Some .) . f <$> enumerate <*> enumerate
+
+-- | Consume any valid token.
+anyToken :: Lexer SomeLocatedToken
+anyToken = Mega.choice (someToken <$> allLexemes)
 
 -- | Tokenize the input source into a stream.
 tokenize :: Lexer TokenStream

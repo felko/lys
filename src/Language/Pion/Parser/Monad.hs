@@ -64,13 +64,13 @@ runParser parser name source =
 -- token, and fails if the next token represents a different lexeme.
 lexeme :: Lexeme a -> Parser a
 lexeme expectedLexeme = do
-  (tokenData, stop) <- Mega.token matchToken expectedTokens
-  option (pure ()) put stop
+  (tokenData, end) <- Mega.token matchToken expectedTokens
+  option (pure ()) put end
   pure tokenData
   where
     matchToken (Located (Some Token {..}) span) = do
       Refl <- geq tokenLexeme expectedLexeme
-      pure (tokenData, spanStop <$> span)
+      pure (tokenData, spanEnd <$> span)
     expectedTokens = mempty
 
 -- | Attach source information to a parse result.

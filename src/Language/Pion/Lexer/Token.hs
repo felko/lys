@@ -1,4 +1,3 @@
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -36,6 +35,7 @@ module Language.Pion.Lexer.Token
   )
 where
 
+import Data.Functor.Classes
 import Data.GADT.Compare
 import Data.GADT.Compare.TH
 import Data.GADT.Show
@@ -165,6 +165,9 @@ deriving instance Ord (Lexeme a)
 
 deriving instance Show (Lexeme a)
 
+instance Eq1 Lexeme where
+  liftEq _ = defaultEq
+
 deriveGEq ''Lexeme
 deriveGCompare ''Lexeme
 deriveGShow ''Lexeme
@@ -179,9 +182,16 @@ data Token a = Token
     tokenData :: !a
   }
 
+instance Eq1 Token where
+  liftEq eq (Token l o d) (Token l' o' d') =
+    (l `defaultEq` l') && (o == o') && (d `eq` d')
+
+instance Show1 Token where
+  liftShowsPrec _ _ = gshowsPrec
+
 instance GEq Token where
-  geq (Token l _ d) (Token l' _ d') =
-    case (l, l') of
+  geq (Token l o d) (Token l' o' d')
+    | o == o' = case (l, l') of
       (Keyword kw, Keyword kw') | kw == kw' -> Just Refl
       (ConnectiveType c, ConnectiveType c') | c == c' -> Just Refl
       (ModalityType m, ModalityType m') | m == m' -> Just Refl
@@ -195,10 +205,11 @@ instance GEq Token where
       (CharLiteral, CharLiteral) | d == d' -> Just Refl
       (StringLiteral, StringLiteral) | d == d' -> Just Refl
       _ -> Nothing
+    | otherwise = Nothing
 
 instance GCompare Token where
-  gcompare (Token l _ d) (Token l' _ d') =
-    tokenDataOrdering . gcompare l l'
+  gcompare (Token l o d) (Token l' o' d') =
+    genericCompare o o' . tokenDataOrdering . gcompare l l'
     where
       tokenDataOrdering = case (l, l') of
         (Keyword kw, Keyword kw') -> genericCompare kw kw'
