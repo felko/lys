@@ -7,9 +7,11 @@ where
 import Language.Pion.Lexer.Token
 import Language.Pion.Name
 import Language.Pion.Parser.Error
+import qualified Language.Pion.Parser.Literal as Literal
 import Language.Pion.Parser.Monad
 import Language.Pion.SourceSpan
 import Language.Pion.Syntax.Expr
+import Language.Pion.Syntax.Literal
 
 -- | Parse an expression.
 expression :: Parser (Located Expr)
@@ -21,7 +23,8 @@ expression =
 -- | Parse an expression factor in an application.
 factor :: Parser (Located Expr)
 factor =
-  variable
+  literal
+    <|> variable
     <|> between Paren expression
     <?> "expression"
 
@@ -50,3 +53,7 @@ application = do
         { locNode = App f x,
           locSpan = spanAcc <> locSpan x
         }
+
+-- | Parse a literal value.
+literal :: Parser (Located Expr)
+literal = located $ Lit <$> Literal.literal

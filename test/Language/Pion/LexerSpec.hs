@@ -20,7 +20,6 @@ spec :: Spec
 spec = do
   describe "literals" do
     pure ()
-  -- it "should lex character literals" do
   describe "trailing space" do
     it "any lexeme should skip trailing spaces" do
       forAll lexemeWithTrailingSpaceInSource \(l, _, s) ->
