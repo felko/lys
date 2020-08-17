@@ -2,6 +2,7 @@
 module Language.Pion.Lexer.Error
   ( LexerError(..),
     LexerErrorRepr,
+    LexerErrorBundle,
     reprLexerErrorBundle,
   ) where
 
@@ -13,9 +14,6 @@ import qualified Text.Megaparsec as Mega
 import qualified Text.Megaparsec.Error as Mega
 
 import qualified Data.Text.Lazy as LText
-
--- | Type of pretty printed lexer errors.
-type LexerErrorRepr = Doc AnsiStyle
 
 -- | A single lexer error, raised when encoutering an invalid token.
 data LexerError
@@ -31,6 +29,12 @@ instance Mega.ShowErrorComponent LexerError where
     MalformedCharLiteral -> "Malformed character literal"
     MalformedStringLiteral -> "Malformed string literal"
     UnknownToken -> "Lexer error"
+
+-- | Type of pretty printed lexer errors.
+type LexerErrorRepr = Doc AnsiStyle
+
+-- | Error bundle of lexer errors.
+type LexerErrorBundle = Mega.ParseErrorBundle LText LexerError
 
 -- | An adaptation of <https://hackage.haskell.org/package/megaparsec-8.0.0/docs/src/Text.Megaparsec.Error.html#errorBundlePretty>
 -- to handle ANSI-annotated docs.

@@ -32,7 +32,7 @@ type Lexer a = Mega.Parsec LexerError LText a
 
 -- | Run a lexer on source code with a given name.
 runLexer ::
-  MonadError LexerErrorRepr m =>
+  MonadError LexerErrorBundle m =>
   -- | The 'Lexer' action to execute
   Lexer a ->
   -- | The name of the input source, useful for error messages
@@ -43,9 +43,7 @@ runLexer ::
   -- lexer errors
   m a
 runLexer lexer name source =
-  liftEither
-    . first reprLexerErrorBundle
-    $ Mega.runParser lexer name source
+  liftEither $ Mega.runParser lexer name source
 
 -- | Skip a line comment, which is prefixed by @--@.
 lineComment :: Lexer ()

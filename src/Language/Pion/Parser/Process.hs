@@ -15,8 +15,8 @@ import Language.Pion.Syntax.Process
 import Prelude hiding (join)
 
 -- | Parse an process.
-process :: Parser Process
-process = Process <$> action `sepBy` Token.Semicolon
+process :: Parser (Located Process)
+process = located $ Process <$> action `sepBy` Token.Semicolon
 
 action :: Parser (Located Action)
 action =
@@ -65,7 +65,7 @@ branchingAction constr prefix caseParser =
       Token.Brace
       Token.Bar
       (located caseParser)
-      (located process)
+      process
 
 join :: Parser Action
 join = branchingAction Join Token.Join name

@@ -2,6 +2,7 @@
 module Language.Pion.Parser.Error
   ( ParseError (..),
     ParseErrorRepr,
+    ParseErrorBundle,
     reprParseErrorBundle,
   )
 where
@@ -11,8 +12,6 @@ import Language.Pion.Lexer.Token
 import Prettyprinter
 import Prettyprinter.Render.Terminal (AnsiStyle)
 import qualified Text.Megaparsec as Mega
-
-type ParseErrorRepr = Doc AnsiStyle
 
 data ParseError
   = UnexpectedToken (Some Token)
@@ -26,5 +25,9 @@ instance Mega.ShowErrorComponent ParseError where
     ExtraneousClosingDelimiter delimType -> "Extraneous closing " <> show delimType
     MissingClosingDelimiter delimType -> "Missing closing " <> show delimType
 
-reprParseErrorBundle :: Mega.ParseErrorBundle Stream ParseError -> ParseErrorRepr
+type ParseErrorRepr = Doc AnsiStyle
+
+type ParseErrorBundle = Mega.ParseErrorBundle Stream ParseError
+
+reprParseErrorBundle :: ParseErrorBundle -> ParseErrorRepr
 reprParseErrorBundle = fromString . Mega.errorBundlePretty

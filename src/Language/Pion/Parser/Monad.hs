@@ -54,7 +54,7 @@ type Parser = Mega.ParsecT ParseError Token.Stream (State Mega.SourcePos)
 
 -- | Run a parser on a token stream, lexed from a source with a given name.
 runParser ::
-  MonadError ParseErrorRepr m =>
+  MonadError ParseErrorBundle m =>
   -- | The 'Parser' action to execute
   Parser a ->
   -- | The name of the input source, useful for error messages
@@ -66,7 +66,6 @@ runParser ::
   m a
 runParser parser name stream =
   liftEither
-    . first reprParseErrorBundle
     . flip evalState (Mega.initialPos name)
     $ Mega.runParserT parser name stream
 

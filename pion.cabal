@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c733de131cd0a3de19aaa5ba8dae106bdb417c03106db0f52dcfb90f3fe5aa71
+-- hash: b16ce5f888f493c5609adddbf775a2c569933319e8749eec8e933cf120791c5b
 
 name:           pion
 version:        0.0.1.0
@@ -111,6 +111,7 @@ test-suite pion-test
   other-modules:
       Language.Pion.LexerSpec
       Language.Pion.ParserSpec
+      Utils
       Paths_pion
   hs-source-dirs:
       test/src
