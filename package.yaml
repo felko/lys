@@ -9,6 +9,8 @@ copyright: "2020 felko"
 extra-source-files:
   - README.md
   - CHANGELOG.md
+  - test/passing/**/*.pion
+  - test/failing/**/*.pion
 
 description: Please see the README on GitHub at <https://github.com/felko/pion#readme>
 
@@ -104,7 +106,7 @@ executables:
 tests:
   pion-test:
     main: Spec.hs
-    source-dirs: test
+    source-dirs: test/src
     ghc-options:
       - -threaded
       - -rtsopts

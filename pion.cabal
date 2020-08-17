@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 0844c719ac582cbe4df87d3a69f9057e7b940f6aee6a7286b8db93e2abd33341
+-- hash: c733de131cd0a3de19aaa5ba8dae106bdb417c03106db0f52dcfb90f3fe5aa71
 
 name:           pion
 version:        0.0.1.0
@@ -20,6 +20,7 @@ build-type:     Simple
 extra-source-files:
     README.md
     CHANGELOG.md
+    test/passing/test.pion
 
 source-repository head
   type: git
@@ -112,7 +113,7 @@ test-suite pion-test
       Language.Pion.ParserSpec
       Paths_pion
   hs-source-dirs:
-      test
+      test/src
   default-extensions: LambdaCase BlockArguments TupleSections BangPatterns PatternSynonyms RecordWildCards NamedFieldPuns GeneralizedNewtypeDeriving StandaloneDeriving DerivingStrategies DerivingVia DeriveGeneric DeriveFunctor DeriveFoldable DeriveTraversable FlexibleInstances InstanceSigs FlexibleContexts RankNTypes ScopedTypeVariables TypeApplications GADTs OverloadedStrings
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wtabs -threaded -rtsopts -with-rtsopts=-N
   build-depends:

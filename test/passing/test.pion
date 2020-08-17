@@ -1,0 +1,3 @@
+extract x → a;
+run jsp { x ← a; y ← b; z → c };
+result ← z 123
