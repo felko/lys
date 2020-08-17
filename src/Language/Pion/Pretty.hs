@@ -2,6 +2,7 @@
 module Language.Pion.Pretty
   ( -- * Reexports
     module Prettyprinter,
+    module Prettyprinter.Render.Terminal,
 
     -- * Conversion
     docToString,

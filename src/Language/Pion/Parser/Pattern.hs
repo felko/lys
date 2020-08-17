@@ -5,8 +5,6 @@ module Language.Pion.Parser.Pattern
 where
 
 import qualified Language.Pion.Lexer.Token as Token
-import Language.Pion.Name
-import Language.Pion.Parser.Error
 import Language.Pion.Parser.Monad
 import Language.Pion.SourceSpan
 import Language.Pion.Syntax.Pattern

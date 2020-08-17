@@ -35,7 +35,6 @@ module Language.Pion.Lexer.Token
   )
 where
 
-import qualified Data.Char as Char (toUpper)
 import Data.Functor.Classes
 import Data.GADT.Compare
 import Data.GADT.Compare.TH
@@ -44,7 +43,6 @@ import Data.GADT.Show.TH
 import Data.List (span)
 import Data.Semigroup (option)
 import Data.Some
-import qualified Data.Text as Text (toUpper)
 import qualified Data.Text.Lazy as LText (drop, splitAt, takeWhile)
 import Data.Type.Equality
 import GHC.Show (showChar, showParen, showString, showsPrec)

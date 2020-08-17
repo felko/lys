@@ -1,6 +1,5 @@
 module Main where
 
-import Control.Monad.Except (runExceptT)
 import Language.Pion.Lexer
 import Language.Pion.Parser
 import Prettyprinter (pretty)

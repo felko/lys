@@ -64,10 +64,10 @@ runParser ::
   -- | The result, wrapped into an error monad which can throw (pretty printed)
   -- parse errors
   m a
-runParser parser name stream =
+runParser parser sourceName stream =
   liftEither
-    . flip evalState (Mega.initialPos name)
-    $ Mega.runParserT (parser <* Mega.eof) name stream
+    . flip evalState (Mega.initialPos sourceName)
+    $ Mega.runParserT (parser <* Mega.eof) sourceName stream
 
 -- | Consume a single lexeme and return the data associated with the matching
 -- token, and fails if the next token represents a different lexeme.

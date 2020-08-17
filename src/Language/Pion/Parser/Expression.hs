@@ -5,20 +5,18 @@ module Language.Pion.Parser.Expression
 where
 
 import qualified Language.Pion.Lexer.Token as Token
-import Language.Pion.Name
-import Language.Pion.Parser.Error
 import qualified Language.Pion.Parser.Literal as Literal
 import Language.Pion.Parser.Monad
 import Language.Pion.Parser.Pattern (pattern')
 import Language.Pion.SourceSpan
 import Language.Pion.Syntax.Expression
-import Language.Pion.Syntax.Literal
 
 -- | Parse an expression.
 expression :: Parser (Located Expression)
 expression =
   abstraction
     <|> application
+    <|> match
     <?> "expression"
 
 -- | Parse an expression factor in an application.
