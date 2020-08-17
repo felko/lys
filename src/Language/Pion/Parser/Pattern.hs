@@ -1,6 +1,7 @@
 -- | Pattern parser.
 module Language.Pion.Parser.Pattern
   ( pattern',
+    prefixedPattern,
   )
 where
 
@@ -12,14 +13,19 @@ import Prelude hiding (drop)
 
 pattern' :: Parser (Located Pattern)
 pattern' =
+  prefixedPattern
+    <|> located variable
+    <?> "pattern"
+
+prefixedPattern :: Parser (Located Pattern)
+prefixedPattern =
   located
     ( split
         <|> select
         <|> extract
         <|> unwrap
         <|> copy
-        <|> variable
-        <?> "pattern"
+        <?> "prefixed pattern"
     )
 
 variable :: Parser Pattern

@@ -7,16 +7,19 @@ where
 import qualified Language.Pion.Lexer.Token as Token
 import qualified Language.Pion.Parser.Literal as Literal
 import Language.Pion.Parser.Monad
-import Language.Pion.Parser.Pattern (pattern')
+import Language.Pion.Parser.Pattern
 import Language.Pion.SourceSpan
+import Language.Pion.Syntax.Branch
 import Language.Pion.Syntax.Expression
+import Language.Pion.Syntax.Pattern (Pattern)
 
 -- | Parse an expression.
 expression :: Parser (Located Expression)
 expression =
-  abstraction
+  match
+    <|> let'
+    <|> abstraction
     <|> application
-    <|> match
     <?> "expression"
 
 -- | Parse an expression factor in an application.
@@ -79,3 +82,32 @@ match =
           Token.Bar
           pattern'
           expression
+
+-- | Parse let bindings.
+let' :: Parser (Located Expression)
+let' = located do
+  bindings <- (pure <$> singleLetBinding) <|> aggregateLetBindings
+  keyword Token.In
+  body <- expression
+  pure $ Let bindings body
+
+-- | Parse a let binding that starts with a given pattern parser.
+letBindingWith :: Parser (Located Pattern) -> Parser (Branch Pattern Expression)
+letBindingWith patternParser = do
+  bound <- patternParser
+  punctuation Token.Equals
+  value <- expression
+  pure (Branch bound value)
+
+-- | Parse a single let binding, whether it is explicit (starts with @let@)
+-- or implicit (where the pattern is prefixed by a disambiguating keyword).
+singleLetBinding :: Parser (Branch Pattern Expression)
+singleLetBinding =
+  letBindingWith prefixedPattern
+    <|> (keyword Token.Let *> letBindingWith pattern')
+
+-- | Parse many let bindings enclosed in braces and separated by semicolons.
+aggregateLetBindings :: Parser (Branches Pattern Expression)
+aggregateLetBindings =
+  keyword Token.Let
+    *> between Token.Brace (letBindingWith pattern' `sepBy` Token.Semicolon)

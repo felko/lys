@@ -67,9 +67,9 @@ instance Pretty Expression where
         [ ("matched", pretty value),
           ("cases", pretty cases)
         ]
-    Let definitions cont ->
+    Let bindings body ->
       prettyASTNode
         "Let"
-        [ ("definitions", pretty definitions),
-          ("cont", pretty cont)
+        [ ("bindings", pretty bindings),
+          ("body", pretty body)
         ]

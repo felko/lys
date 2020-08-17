@@ -101,6 +101,8 @@ data Keyword
   | Drop
   | Copy
   | Run
+  | Let
+  | In
   deriving (Eq, Ord, Show, Enum, Bounded)
 
 -- | Textual content of a keyword.
@@ -124,6 +126,8 @@ keywordText = \case
   Drop -> "drop"
   Copy -> "copy"
   Run -> "run"
+  Let -> "let"
+  In -> "in"
 
 -- | A punctuation lexeme.
 data Punctuation
@@ -136,6 +140,7 @@ data Punctuation
   | Lambda
   | Lollipop
   | Bar
+  | Equals
   | LeftArrow
   | RightArrow
   deriving (Eq, Ord, Show, Enum, Bounded)
@@ -151,6 +156,7 @@ punctuationSymbol = \case
   Lambda -> "λ"
   Lollipop -> "⊸"
   Bar -> "|"
+  Equals -> "="
   LeftArrow -> "←"
   RightArrow -> "→"
 
