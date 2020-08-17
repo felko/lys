@@ -30,7 +30,8 @@ runParserReprError ::
   Stream ->
   ExceptT ParseErrorRepr m a
 runParserReprError parser name stream =
-  withExceptT reprParseErrorBundle (runParser parser name stream)
+  withExceptT reprParseErrorBundle $
+    runParser parser name stream
 
 parseProcess ::
   Monad m =>

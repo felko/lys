@@ -302,25 +302,17 @@ instance GShow Token where
 instance Pretty (Token a) where
   pretty :: forall ann. Token a -> Doc ann
   pretty Token {..} = case tokenLexeme of
-    Keyword kw -> prettyUpperText (keywordText kw)
-    ConnectiveType c -> prettyUpperShow c
-    ModalityType m -> prettyUpperShow m
-    UnitType u -> prettyUpperShow u
-    Delimiter delim delimType ->
-      let prefix = case delim of
-            Opening -> "L"
-            Closing -> "R"
-       in prefix <> prettyUpperShow delimType
-    Punctuation p -> prettyUpperShow p
-    Identifier -> "IDENTIFIER" <> parens (pretty tokenData)
-    IntegerLiteral -> "INTEGER" <> parens (pretty tokenData)
-    FloatLiteral -> "FLOAT" <> parens (pretty tokenData)
-    CharLiteral -> "CHAR" <> parens (prettyCharLiteral tokenData)
-    StringLiteral -> "STRING" <> parens (prettyStringLiteral tokenData)
-    where
-      prettyUpperText = pretty . Text.toUpper
-      prettyUpperShow :: forall b. Show b => b -> Doc ann
-      prettyUpperShow = pretty . map Char.toUpper . show
+    Keyword kw -> pretty (keywordText kw)
+    ConnectiveType c -> pretty (connectiveTypeSymbol c)
+    ModalityType m -> pretty (modalityTypeSymbol m)
+    UnitType u -> pretty (unitTypeSymbol u)
+    Delimiter delim delimType -> pretty (delimiterSymbol delim delimType)
+    Punctuation p -> pretty (punctuationSymbol p)
+    Identifier -> pretty tokenData
+    IntegerLiteral -> pretty tokenData
+    FloatLiteral -> pretty tokenData
+    CharLiteral -> prettyCharLiteral tokenData
+    StringLiteral -> prettyStringLiteral tokenData
 
 -- | A stream of tokens
 data Stream = Stream
@@ -394,7 +386,7 @@ instance Mega.Stream Stream where
              in (consumed, Stream (LText.drop (fromIntegral consumedLength) source) remaining)
 
   showTokens :: Proxy Stream -> NonEmpty SomeLocatedToken -> String
-  showTokens _ tokens = intercalate ", " . fmap show $ toList tokens
+  showTokens _ tokens = docToString . hsep . fmap pretty $ toList tokens
 
   tokensLength :: Proxy Stream -> NonEmpty SomeLocatedToken -> Int
   tokensLength _ = sum . fmap someTokenLength

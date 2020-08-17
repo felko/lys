@@ -12,6 +12,7 @@ import Language.Pion.Parser.Pattern
 import Language.Pion.SourceSpan
 import Language.Pion.Syntax.Branch
 import Language.Pion.Syntax.Process
+import qualified Text.Megaparsec as Mega
 import Prelude hiding (join)
 
 -- | Parse an process.
@@ -21,13 +22,13 @@ process = located $ Process <$> action `sepBy` Token.Semicolon
 action :: Parser (Located Action)
 action =
   located $
-    ( run
+    ( Mega.try run
+        <|> Mega.try preAction
+        <|> Mega.try postAction
         <|> join
         <|> fork
         <|> alternative
         <|> match
-        <|> preAction
-        <|> postAction
         <?> "action"
     )
 

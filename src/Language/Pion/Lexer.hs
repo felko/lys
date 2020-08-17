@@ -16,7 +16,7 @@ import Language.Pion.Lexer.Token
 import Language.Pion.Lexer.Tokenize
 
 lex ::
-  MonadError LexerErrorRepr m =>
+  Monad m =>
   String ->
   LText ->
   ExceptT LexerErrorRepr m Stream

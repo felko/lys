@@ -67,7 +67,7 @@ runParser ::
 runParser parser name stream =
   liftEither
     . flip evalState (Mega.initialPos name)
-    $ Mega.runParserT parser name stream
+    $ Mega.runParserT (parser <* Mega.eof) name stream
 
 -- | Consume a single lexeme and return the data associated with the matching
 -- token, and fails if the next token represents a different lexeme.

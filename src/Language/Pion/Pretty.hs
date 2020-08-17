@@ -3,6 +3,9 @@ module Language.Pion.Pretty
   ( -- * Reexports
     module Prettyprinter,
 
+    -- * Conversion
+    docToString,
+
     -- * Literals
     prettyCharLiteral,
     prettyStringLiteral,
@@ -17,7 +20,14 @@ where
 
 import Data.Char (showLitChar)
 import Prettyprinter
+import Prettyprinter.Render.Terminal
 import Prelude
+
+docToString :: Doc AnsiStyle -> String
+docToString =
+  toString
+    . renderStrict
+    . layoutPretty defaultLayoutOptions
 
 -- | Pretty print an escaped character literal.
 prettyCharLiteral :: Char -> Doc ann
@@ -26,7 +36,7 @@ prettyCharLiteral char = squotes (pretty (showLitChar char ""))
 -- | Pretty print a string literal, surrounded by double quotes.
 -- Escapes characters as necessary.
 prettyStringLiteral :: Text -> Doc ann
-prettyStringLiteral str = pretty (show @Text @Text str)
+prettyStringLiteral str = pretty (show @Text str)
 
 -- | Print a label in front of a pretty printed item.
 prettyLabelled :: Doc ann -> Doc ann -> Doc ann
@@ -44,7 +54,7 @@ prettyASTNode label fields =
   where
     open = flatAlt "" "{ "
     close = flatAlt "" " }"
-    separator   = flatAlt "" ", "
+    separator = flatAlt "" ", "
     prettyFields = fmap (uncurry prettyField) fields
 
 -- | Pretty print a bulleted list.
