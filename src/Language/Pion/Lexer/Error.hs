@@ -14,10 +14,10 @@ import qualified Text.Megaparsec.Error as Mega
 
 import qualified Data.Text.Lazy as LText
 
--- | Type of pretty printed lexer errors
+-- | Type of pretty printed lexer errors.
 type LexerErrorRepr = Doc AnsiStyle
 
--- | A single lexer error, raised when encoutering an invalid token
+-- | A single lexer error, raised when encoutering an invalid token.
 data LexerError
   = InvalidIdentifier Text
   | MalformedCharLiteral

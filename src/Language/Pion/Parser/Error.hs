@@ -26,5 +26,5 @@ instance Mega.ShowErrorComponent ParseError where
     ExtraneousClosingDelimiter delimType -> "Extraneous closing " <> show delimType
     MissingClosingDelimiter delimType -> "Missing closing " <> show delimType
 
-reprParseErrorBundle :: Mega.ParseErrorBundle TokenStream ParseError -> ParseErrorRepr
+reprParseErrorBundle :: Mega.ParseErrorBundle Stream ParseError -> ParseErrorRepr
 reprParseErrorBundle = fromString . Mega.errorBundlePretty

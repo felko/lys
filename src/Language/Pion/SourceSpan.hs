@@ -5,6 +5,7 @@ module Language.Pion.SourceSpan
   ( -- * Source interval
     SourceSpan (..),
     Located (..),
+    unknownLocation,
   )
 where
 
@@ -33,6 +34,9 @@ data Located a = Located
   deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
   deriving (Generic1)
   deriving (Show1) via (Generically1 Located)
+
+unknownLocation :: a -> Located a
+unknownLocation node = Located node mempty
 
 instance Eq1 Located where
   liftEq eq (Located node span) (Located node' span') =

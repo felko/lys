@@ -1,21 +1,21 @@
 -- | Names
 module Language.Pion.Name
   ( Name (..),
-    Ident (..),
+    Identifier (..),
     Label (..),
   )
 where
 
 import Language.Pion.Pretty
 
-newtype Name = Name {getName :: Text}
+newtype Name = Name {unName :: Text}
   deriving stock (Eq, Show, Ord)
   deriving newtype (Hashable, Pretty)
 
-newtype Ident = Ident {getIdent :: Text}
+newtype Identifier = Identifier {unIdentifier :: Text}
   deriving stock (Eq, Show, Ord)
   deriving newtype (Hashable, Pretty)
 
-newtype Label = Label {getLabel :: Text}
+newtype Label = Label {unLabel :: Text}
   deriving stock (Eq, Show, Ord)
   deriving newtype (Hashable, Pretty)

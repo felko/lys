@@ -1,59 +1,99 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE TemplateHaskell #-}
-
 -- | Syntax of processes
-module Language.Pion.Syntax.Process where
+module Language.Pion.Syntax.Process
+  ( Side (..),
+    PortMap,
+    Action (..),
+    Process (..),
+  )
+where
 
-import Data.GADT.Compare.TH
-import Data.GADT.Show.TH
-import Data.Some
-import Language.Pion.Name (Ident, Label, Name)
-import Language.Pion.SourceSpan (Located)
-import Language.Pion.Syntax.Expr
-import Language.Pion.Syntax.Pattern
-import qualified Language.Pion.Syntax.Process.Flow as Flow
+import Language.Pion.Name
+import Language.Pion.Pretty
+import Language.Pion.SourceSpan
+import Language.Pion.Syntax.Branch
+import Language.Pion.Syntax.Expression (Expression)
+import Language.Pion.Syntax.Pattern (Pattern)
 
 data Side = LeftSide | RightSide
   deriving (Eq, Ord, Show)
 
-type PortMap = [Located (Label, Label, Side)]
+type PortMap = [Located (Name, Side, Name)]
 
-data Branch = Branch
-  { branchLabel :: Label,
-    branchBody :: Located Process
-  }
+data Action
+  = -- | p → x; P
+    Pre (Located Name) (Located Pattern)
+  | -- | P; x ← e
+    Post (Located Name) (Located Expression)
+  | -- | run p { x ← a, y → b }
+    Run (Located Identifier) PortMap
+  | -- | join z { x : P | y : Q }
+    Join (Located Name) (Branches Name Process)
+  | -- | fork z { x : P | y : Q }
+    Fork (Located Name) (Branches Name Process)
+  | -- | alt z { x : P | y : Q }
+    Alternative (Located Name) (Branches Label Process)
+  | -- | match z { x : P | y : Q }
+    Match (Located Name) (Branches Label Process)
   deriving (Eq, Ord, Show)
 
-type Branches = [Located Branch]
-
-data Action (control :: Flow.Flow) where
-  -- P; x ← e
-  Intro :: Located Name -> Located Expr -> Action 'Flow.Post
-  -- p → x; P
-  Pre :: Located Pattern -> Located Name -> Action 'Flow.Pre
-  -- run p { x ← a, y → b }
-  Run :: Located Ident -> Located PortMap -> Action 'Flow.Terminal
-  -- join z ←/→ { x : P | y : Q }
-  Join :: Located Name -> Side -> Located Branches -> Action 'Flow.Terminal
-  -- match z ←/→ { x : P | y : Q }
-  Match :: Located Name -> Side -> Located Branches -> Action 'Flow.Terminal
-
-deriving instance Eq (Action f)
-
-deriving instance Ord (Action f)
-
-deriving instance Show (Action f)
+instance Pretty Action where
+  pretty = \case
+    Pre name pat ->
+      prettyASTNode
+        "Pre"
+        [ ("name", pretty name),
+          ("pattern", pretty pat)
+        ]
+    Post name expr ->
+      prettyASTNode
+        "Post"
+        [ ("name", pretty name),
+          ("expression", pretty expr)
+        ]
+    Run ident ports ->
+      let prettyPort Located {locNode = (p, s, q)} =
+            case s of
+              LeftSide -> pretty p <+> "←" <+> pretty q
+              RightSide -> pretty p <+> "→" <+> pretty q
+       in prettyASTNode
+            "Run"
+            [ ("ident", pretty ident),
+              ( "ports",
+                prettyLabelled "PortMap"
+                  . prettyASTList
+                  $ fmap prettyPort ports
+              )
+            ]
+    Join name procs ->
+      prettyASTNode
+        "Join"
+        [ ("name", pretty name),
+          ("processes", pretty procs)
+        ]
+    Fork name procs ->
+      prettyASTNode
+        "Fork"
+        [ ("name", pretty name),
+          ("processes", pretty procs)
+        ]
+    Alternative name procs ->
+      prettyASTNode
+        "Alt"
+        [ ("name", pretty name),
+          ("processes", pretty procs)
+        ]
+    Match name procs ->
+      prettyASTNode
+        "Match"
+        [ ("name", pretty name),
+          ("processes", pretty procs)
+        ]
 
 data Process = Process
-  {procActions :: [Some Action]}
+  {procActions :: [Located Action]}
+  deriving (Eq, Ord, Show)
 
-deriving instance Eq Process
-
-deriving instance Ord Process
-
-deriving instance Show Process
-
-deriveGEq ''Action
-deriveGCompare ''Action
-deriveGShow ''Action
+instance Pretty Process where
+  pretty Process {..} =
+    prettyLabelled "Process" $
+      prettyASTList (fmap pretty procActions)

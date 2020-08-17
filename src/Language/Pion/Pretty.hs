@@ -1,10 +1,17 @@
 -- | Common utility functions for pretty printing.
 module Language.Pion.Pretty
-  ( module Prettyprinter,
+  ( -- * Reexports
+    module Prettyprinter,
+
+    -- * Literals
     prettyCharLiteral,
     prettyStringLiteral,
-    prettyASTNode,
+
+    -- * AST pretty printing
+    prettyLabelled,
     prettyField,
+    prettyASTNode,
+    prettyASTList,
   )
 where
 
@@ -12,21 +19,41 @@ import Data.Char (showLitChar)
 import Prettyprinter
 import Prelude
 
+-- | Pretty print an escaped character literal.
 prettyCharLiteral :: Char -> Doc ann
 prettyCharLiteral char = squotes (pretty (showLitChar char ""))
 
+-- | Pretty print a string literal, surrounded by double quotes.
+-- Escapes characters as necessary.
 prettyStringLiteral :: Text -> Doc ann
 prettyStringLiteral str = pretty (show @Text @Text str)
 
+-- | Print a label in front of a pretty printed item.
+prettyLabelled :: Doc ann -> Doc ann -> Doc ann
+prettyLabelled label labelled = group $ label <> labelled
+
+-- | Pretty print an AST field.
+prettyField :: Doc ann -> Doc ann -> Doc ann
+prettyField name value = name <> colon <+> value
+
+-- | Pretty print an AST node, given its label and fields.
 prettyASTNode :: Doc ann -> [(Doc ann, Doc ann)] -> Doc ann
 prettyASTNode label fields =
-  group $
-    label <> nest 2 (line <> align (encloseSep open close separator prettyFields))
+  prettyLabelled label $
+    nest 2 (line <> align (encloseSep open close separator prettyFields))
   where
     open = flatAlt "" "{ "
     close = flatAlt "" " }"
     separator   = flatAlt "" ", "
     prettyFields = fmap (uncurry prettyField) fields
 
-prettyField :: Doc ann -> Doc ann -> Doc ann
-prettyField name value = name <> colon <+> value
+-- | Pretty print a bulleted list.
+prettyASTList :: [Doc ann] -> Doc ann
+prettyASTList elements =
+  group $ nest 2 (line <> align (encloseSep open close separator bulletedList))
+  where
+    open = flatAlt "" "["
+    close = flatAlt "" " ]"
+    bullet = flatAlt "- " ""
+    separator = flatAlt "" ", "
+    bulletedList = fmap (bullet <>) elements

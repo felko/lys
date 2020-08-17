@@ -2,7 +2,6 @@ module Main where
 
 import Control.Monad.Except (runExcept)
 import Language.Pion.Lexer (lex)
-import Language.Pion.Lexer.Token (TokenStream (..))
 import Language.Pion.Parser (parseExpression)
 import Prettyprinter (pretty)
 import Prettyprinter.Render.Terminal (putDoc)

@@ -31,7 +31,7 @@ module Language.Pion.Lexer.Token
     SomeLocatedToken,
 
     -- * Stream of tokens
-    TokenStream (..),
+    Stream (..),
   )
 where
 
@@ -91,13 +91,18 @@ data Keyword
   | Module
   | Import
   | Extract
+  | Unwrap
+  | Alternative
+  | Fork
   | Match
+  | Split
   | Join
   | Select
   | Unit
   | Absurd
   | Drop
   | Copy
+  | Run
   deriving (Eq, Ord, Show, Enum, Bounded)
 
 -- | Textual content of a keyword.
@@ -109,13 +114,18 @@ keywordText = \case
   Module -> "module"
   Import -> "import"
   Extract -> "extract"
+  Unwrap -> "unwrap"
+  Alternative -> "alternative"
+  Fork -> "fork"
   Match -> "match"
+  Split -> "split"
   Join -> "join"
   Select -> "select"
   Unit -> "unit"
   Absurd -> "absurd"
   Drop -> "drop"
   Copy -> "copy"
+  Run -> "run"
 
 -- | A punctuation lexeme.
 data Punctuation
@@ -127,6 +137,9 @@ data Punctuation
   | Turnstile
   | Lambda
   | Lollipop
+  | Bar
+  | LeftArrow
+  | RightArrow
   deriving (Eq, Ord, Show, Enum, Bounded)
 
 punctuationSymbol :: Punctuation -> Text
@@ -139,6 +152,9 @@ punctuationSymbol = \case
   Turnstile -> "⊢"
   Lambda -> "λ"
   Lollipop -> "⊸"
+  Bar -> "|"
+  LeftArrow -> "←"
+  RightArrow -> "→"
 
 -- | Type of lexemes. @Lexeme a@ represents a lexeme
 -- which, when tokenized, holds data of type @a@.
@@ -307,7 +323,7 @@ instance Pretty (Token a) where
       prettyUpperShow = pretty . map Char.toUpper . show
 
 -- | A stream of tokens
-data TokenStream = TokenStream
+data Stream = Stream
   { -- | The source associated with the stream. This allows
     -- the parse error to report the offending lines
     streamSource :: LText,
@@ -331,63 +347,63 @@ someTokenLength Located {..} = case locNode of
 
 -- Adapted from <https://markkarpov.com/tutorial/megaparsec.html#working-with-custom-input-streams>
 -- to work on lazy text.
-instance Mega.Stream TokenStream where
-  type Token TokenStream = SomeLocatedToken
-  type Tokens TokenStream = [SomeLocatedToken]
+instance Mega.Stream Stream where
+  type Token Stream = SomeLocatedToken
+  type Tokens Stream = [SomeLocatedToken]
 
-  tokenToChunk :: Proxy TokenStream -> SomeLocatedToken -> [SomeLocatedToken]
+  tokenToChunk :: Proxy Stream -> SomeLocatedToken -> [SomeLocatedToken]
   tokenToChunk _ = pure
 
-  tokensToChunk :: Proxy TokenStream -> [SomeLocatedToken] -> [SomeLocatedToken]
+  tokensToChunk :: Proxy Stream -> [SomeLocatedToken] -> [SomeLocatedToken]
   tokensToChunk _ = id
 
-  chunkToTokens :: Proxy TokenStream -> [SomeLocatedToken] -> [SomeLocatedToken]
+  chunkToTokens :: Proxy Stream -> [SomeLocatedToken] -> [SomeLocatedToken]
   chunkToTokens _ = id
 
-  chunkLength :: Proxy TokenStream -> [SomeLocatedToken] -> Int
+  chunkLength :: Proxy Stream -> [SomeLocatedToken] -> Int
   chunkLength _ = length
 
-  chunkEmpty :: Proxy TokenStream -> [SomeLocatedToken] -> Bool
+  chunkEmpty :: Proxy Stream -> [SomeLocatedToken] -> Bool
   chunkEmpty _ = null
 
-  take1_ (TokenStream source tokens) = case tokens of
+  take1_ (Stream source tokens) = case tokens of
     [] -> Nothing
     token : remaining ->
       let remainingSource = LText.drop (fromIntegral $ someTokenLength token) source
-       in Just (token, TokenStream remainingSource remaining)
+       in Just (token, Stream remainingSource remaining)
 
-  takeN_ :: Int -> TokenStream -> Maybe ([SomeLocatedToken], TokenStream)
-  takeN_ n (TokenStream source tokens)
-    | n <= 0 = Just ([], TokenStream source tokens)
+  takeN_ :: Int -> Stream -> Maybe ([SomeLocatedToken], Stream)
+  takeN_ n (Stream source tokens)
+    | n <= 0 = Just ([], Stream source tokens)
     | null tokens = Nothing
     | otherwise =
       let (consumed, remaining) = splitAt n tokens
        in case nonEmpty consumed of
-            Nothing -> Just (consumed, TokenStream source remaining)
+            Nothing -> Just (consumed, Stream source remaining)
             Just nonEmptyConsumed ->
-              let consumedLength = Mega.tokensLength (Proxy @TokenStream) nonEmptyConsumed
-               in Just (consumed, TokenStream (LText.drop (fromIntegral consumedLength) source) remaining)
+              let consumedLength = Mega.tokensLength (Proxy @Stream) nonEmptyConsumed
+               in Just (consumed, Stream (LText.drop (fromIntegral consumedLength) source) remaining)
 
-  takeWhile_ :: (SomeLocatedToken -> Bool) -> TokenStream -> ([SomeLocatedToken], TokenStream)
-  takeWhile_ predicate (TokenStream source tokens) =
+  takeWhile_ :: (SomeLocatedToken -> Bool) -> Stream -> ([SomeLocatedToken], Stream)
+  takeWhile_ predicate (Stream source tokens) =
     let (consumed, remaining) = span predicate tokens
      in case nonEmpty consumed of
-          Nothing -> (consumed, TokenStream source remaining)
+          Nothing -> (consumed, Stream source remaining)
           Just nonEmptyConsumed ->
-            let consumedLength = Mega.tokensLength (Proxy @TokenStream) nonEmptyConsumed
-             in (consumed, TokenStream (LText.drop (fromIntegral consumedLength) source) remaining)
+            let consumedLength = Mega.tokensLength (Proxy @Stream) nonEmptyConsumed
+             in (consumed, Stream (LText.drop (fromIntegral consumedLength) source) remaining)
 
-  showTokens :: Proxy TokenStream -> NonEmpty SomeLocatedToken -> String
+  showTokens :: Proxy Stream -> NonEmpty SomeLocatedToken -> String
   showTokens _ tokens = intercalate ", " . fmap show $ toList tokens
 
-  tokensLength :: Proxy TokenStream -> NonEmpty SomeLocatedToken -> Int
+  tokensLength :: Proxy Stream -> NonEmpty SomeLocatedToken -> Int
   tokensLength _ = sum . fmap someTokenLength
 
-  reachOffset :: Int -> Mega.PosState TokenStream -> (String, Mega.PosState TokenStream)
+  reachOffset :: Int -> Mega.PosState Stream -> (String, Mega.PosState Stream)
   reachOffset offset Mega.PosState {..} =
     ( prefix <> restOfLine,
       Mega.PosState
-        { pstateInput = TokenStream postSource postTokens,
+        { pstateInput = Stream postSource postTokens,
           pstateOffset = max pstateOffset offset,
           pstateSourcePos = newSourcePos,
           pstateTabWidth = pstateTabWidth,
@@ -405,16 +421,16 @@ instance Mega.Stream TokenStream where
       tokensConsumed =
         case nonEmpty preTokens of
           Nothing -> 0
-          Just nonEmptyPreTokens -> Mega.tokensLength (Proxy @TokenStream) nonEmptyPreTokens
+          Just nonEmptyPreTokens -> Mega.tokensLength (Proxy @Stream) nonEmptyPreTokens
       restOfLine = toString (LText.takeWhile (/= '\n') postSource)
       prefix =
         if sameLine
           then pstateLinePrefix <> toString preSource
           else toString preSource
 
-instance Pretty TokenStream where
-  pretty :: forall ann. TokenStream -> Doc ann
-  pretty TokenStream {..} = hsep $ prettyToken <$> streamTokens
+instance Pretty Stream where
+  pretty :: forall ann. Stream -> Doc ann
+  pretty Stream {..} = hsep $ prettyToken <$> streamTokens
     where
       prettyToken :: SomeLocatedToken -> Doc ann
       prettyToken Located {..} = foldSome pretty locNode

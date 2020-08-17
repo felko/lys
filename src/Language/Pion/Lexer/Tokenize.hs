@@ -115,7 +115,7 @@ anyToken :: Lexer SomeLocatedToken
 anyToken = Mega.choice (someToken <$> allLexemes)
 
 -- | Tokenize the input source into a stream.
-tokenize :: Lexer TokenStream
+tokenize :: Lexer Stream
 tokenize = do
   source <- Mega.stateInput <$> Mega.getParserState
-  TokenStream source <$> many anyToken <* Mega.eof
+  Stream source <$> many anyToken <* Mega.eof
