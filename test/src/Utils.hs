@@ -5,7 +5,6 @@ module Utils
   )
 where
 
-import Control.Exception (bracket)
 import Language.Pion.Lexer
 import Language.Pion.Parser
 import Test.Hspec
