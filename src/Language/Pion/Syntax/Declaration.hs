@@ -32,7 +32,7 @@ instance Pretty TypeDeclaration where
 data ProcessDeclaration = ProcessDeclaration
   { procDeclName :: Located Identifier,
     procDeclType :: Located Sequent,
-    procDeclBody :: Process
+    procDeclBody :: Located Process
   }
   deriving (Eq, Show)
 
