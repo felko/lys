@@ -24,6 +24,7 @@ import Prettyprinter
 import Prettyprinter.Render.Terminal
 import Prelude
 
+-- | Render an ANSI-annotated doc value to a string.
 docToString :: Doc AnsiStyle -> String
 docToString =
   toString

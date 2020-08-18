@@ -80,8 +80,7 @@ delimiterSymbol = curry \case
   (Opening, Angle) -> "⟨"
   (Closing, Angle) -> "⟩"
 
--- | Type of textual keywords – by opposition to reserved symbols.
--- These are mostly for
+-- | Type of keywords.
 data Keyword
   = Proc
   | Func
@@ -280,7 +279,7 @@ instance GShow Token where
           . showsPrec 11 delimType
     Punctuation pt ->
       showParen (p > 10) $
-        showString "Punctuation "
+        showString "Pu@nctuation "
           . showsPrec 11 pt
     Identifier ->
       showParen (p > 10) $
