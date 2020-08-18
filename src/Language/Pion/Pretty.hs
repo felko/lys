@@ -42,7 +42,7 @@ prettyStringLiteral str = pretty (show @Text str)
 
 -- | Print a label in front of a pretty printed item.
 prettyLabelled :: Doc ann -> Doc ann -> Doc ann
-prettyLabelled label labelled = group $ label <> labelled
+prettyLabelled label labelled = group $ label <+> labelled
 
 -- | Pretty print an AST field.
 prettyField :: Doc ann -> Doc ann -> Doc ann
@@ -64,7 +64,7 @@ prettyASTList :: [Doc ann] -> Doc ann
 prettyASTList elements =
   group $ nest 2 (line <> align (encloseSep open close separator bulletedList))
   where
-    open = flatAlt "" "["
+    open = flatAlt "" "[ "
     close = flatAlt "" " ]"
     bullet = flatAlt "- " ""
     separator = flatAlt "" ", "

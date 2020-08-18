@@ -23,7 +23,7 @@ data Pattern
 
 instance Pretty Pattern where
   pretty = \case
-    Variable name -> pretty name
+    Variable name -> prettyLabelled "Variable" $ pretty name
     Split elements ->
       prettyLabelled "Split" $ pretty elements
     Select label pattern' ->
