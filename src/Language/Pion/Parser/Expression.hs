@@ -35,7 +35,7 @@ expression =
 factor :: Parser (Located Expression)
 factor =
   literal
-    <|> tuple
+    <|> try tuple
     <|> alternative
     <|> variable
     <|> between Token.Paren expression
@@ -84,19 +84,26 @@ literal = located $ Literal <$> Literal.literal
 
 -- | Parse a record or a tuple.
 -- A tuple is either a list of comma-separated expressions or fields,
--- enclosed in braces.
+-- enclosed in parenthesis.
 --
 -- Examples:
 --
 --   * Tuple
 --
--- > {1, 2, 3}
+-- > (1, 2, 3)
 --
 --   * Record
 --
--- > { x : 1, y : 2, z : 3 }
+-- > (x = 1, y = 2, z = 3)
 tuple :: Parser (Located Expression)
-tuple = located $ Tuple <$> conjunction Token.Brace expression
+tuple =
+  located $
+    Tuple
+      <$> conjunction
+        Token.Paren
+        Token.Paren
+        Token.Equal
+        expression
 
 -- | Parse an alternative.
 -- An alternative is described by either a list of expressions, or by a list of
@@ -110,18 +117,25 @@ tuple = located $ Tuple <$> conjunction Token.Brace expression
 --
 --   * Labelled alternative:
 --
--- > ⟨x : 1, y : 2, z : 3⟩
+-- > ⟨x = 1, y = 2, z = 3⟩
 alternative :: Parser (Located Expression)
-alternative = located $ Alternative <$> conjunction Token.Angle expression
+alternative =
+  located $
+    Alternative
+      <$> conjunction
+        Token.Angle
+        Token.Angle
+        Token.Equal
+        expression
 
 -- | Parse a pattern match expression.
 --
 -- Examples:
 --
--- > match n {
--- >   select zero: 0
--- >   select succ n: n + 1
--- > }
+-- > match n
+-- >   { select zero: 0
+-- >   | select succ n: n + 1
+-- >   }
 match :: Parser (Located Expression)
 match =
   located $
@@ -131,6 +145,7 @@ match =
         <*> branches
           Token.Brace
           Token.Bar
+          Token.Colon
           pattern'
           expression
 
@@ -155,7 +170,7 @@ match =
 --   * Multiple let bindings
 --
 -- > let {
--- >   split {x, y} = f 10;
+-- >   split (x, y) = f 10;
 -- >   z = 2;
 -- > } in x + y + z
 let' :: Parser (Located Expression)
@@ -169,7 +184,7 @@ let' = located do
 letBindingWith :: Parser (Located Pattern) -> Parser (Branch Pattern Expression)
 letBindingWith patternParser = do
   bound <- patternParser
-  punctuation Token.Equals
+  punctuation Token.Equal
   value <- expression
   pure (Branch bound value)
 

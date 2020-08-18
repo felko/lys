@@ -47,15 +47,15 @@ variable = Variable <$> name
 --
 --  * Splitting on a tuple:
 --
--- > split { x, y, z }
+-- > split (x, y, z)
 --
 --  * Splitting on a record:
 --
--- > split { x : a, y : b, z : c }
+-- > split (x = a, y = b, z = c)
 split :: Parser Pattern
 split =
   keyword Token.Split
-    >> Split <$> conjunction Token.Brace pattern'
+    >> Split <$> conjunction Token.Paren Token.Paren Token.Equal pattern'
 
 -- | Parse a selector pattern.
 --
@@ -91,8 +91,8 @@ unwrap =
 --
 -- Example:
 --
--- copy { x, y, z }
+-- copy (x, y, z)
 copy :: Parser Pattern
 copy =
   keyword Token.Copy
-    >> Copy <$> between Token.Brace (pattern' `sepBy` Token.Comma)
+    >> Copy <$> between Token.Paren (pattern' `sepBy` Token.Comma)

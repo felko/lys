@@ -16,7 +16,6 @@ module Language.Pion.Lexer.Token
     -- * Logical symbols
     ConnectiveType (..),
     ModalityType (..),
-    UnitType (..),
 
     -- * Punctuation
     Punctuation (..),
@@ -139,7 +138,7 @@ data Punctuation
   | Lambda
   | Lollipop
   | Bar
-  | Equals
+  | Equal
   | LeftArrow
   | RightArrow
   deriving (Eq, Ord, Show, Enum, Bounded)
@@ -155,7 +154,7 @@ punctuationSymbol = \case
   Lambda -> "λ"
   Lollipop -> "⊸"
   Bar -> "|"
-  Equals -> "="
+  Equal -> "="
   LeftArrow -> "←"
   RightArrow -> "→"
 
@@ -166,8 +165,8 @@ data Lexeme a where
   Keyword :: Keyword -> Lexeme ()
   -- Types
   ConnectiveType :: ConnectiveType -> Lexeme ()
+  UnitType :: ConnectiveType -> Lexeme ()
   ModalityType :: ModalityType -> Lexeme ()
-  UnitType :: UnitType -> Lexeme ()
   -- Brackets
   Delimiter :: Delimiter -> DelimiterType -> Lexeme ()
   -- Punctuation
@@ -215,8 +214,8 @@ instance GEq Token where
     | o == o' = case (l, l') of
       (Keyword kw, Keyword kw') | kw == kw' -> Just Refl
       (ConnectiveType c, ConnectiveType c') | c == c' -> Just Refl
+      (UnitType c, UnitType c') | c == c' -> Just Refl
       (ModalityType m, ModalityType m') | m == m' -> Just Refl
-      (UnitType u, UnitType u') | u == u' -> Just Refl
       (Delimiter delimType delim, Delimiter delimType' delim')
         | delimType == delimType', delim == delim' -> Just Refl
       (Punctuation p, Punctuation p') | p == p' -> Just Refl

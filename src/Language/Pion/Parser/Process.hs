@@ -31,9 +31,9 @@ process = located $ Process <$> action `sepBy` Token.Semicolon
 action :: Parser (Located Action)
 action =
   located $
-    ( Mega.try run
-        <|> Mega.try preAction
-        <|> Mega.try postAction
+    ( try run
+        <|> try preAction
+        <|> try postAction
         <|> join
         <|> fork
         <|> alternative
@@ -100,6 +100,7 @@ branchingAction constr prefix caseParser =
     <*> branches
       Token.Brace
       Token.Bar
+      Token.Colon
       (located caseParser)
       process
 

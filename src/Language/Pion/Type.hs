@@ -9,7 +9,6 @@ module Language.Pion.Type
     modalityTypeSymbol,
 
     -- * Units
-    UnitType (..),
     unitTypeSymbol,
   )
 where
@@ -42,18 +41,10 @@ modalityTypeSymbol = \case
   WhyNot -> "?"
   OfCourse -> "!"
 
--- | Type of logical units.
-data UnitType
-  = Bottom
-  | Top
-  | Void
-  | End
-  deriving (Eq, Ord, Show, Enum, Bounded)
-
 -- | The symbol associated with a logical unit.
-unitTypeSymbol :: UnitType -> Text
+unitTypeSymbol :: ConnectiveType -> Text
 unitTypeSymbol = \case
-  Bottom -> "⊥"
-  Top -> "⊤"
-  Void -> "void"
-  End -> "end"
+  Tensor -> "end"
+  Par -> "⊥"
+  Plus -> "void"
+  With -> "⊤"

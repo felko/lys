@@ -1,26 +1,58 @@
--- | Syntax of types
-module Language.Pion.Syntax.Type where
+-- | Syntax of types.
+module Language.Pion.Syntax.Type
+  ( Type(..),
+    Context,
+    Sequent(..),
+  )
+where
 
-import Data.Vector (Vector)
 import Language.Pion.Name
+import Language.Pion.Pretty
+import Language.Pion.SourceSpan
+import Language.Pion.Syntax.Branch
+import Language.Pion.Type
 
-data CompositeConnective
-  = Tensor
-  | Par
-  | Plus
-  | With
-  deriving (Eq, Show)
-
-data ExponentialConnective = OfCourse | WhyNot
-  deriving (Eq, Show)
-
-data Components
-  = Unit
-  | Ordered (Vector Type)
-  | Row (HashMap Label Type)
-  deriving (Eq, Show)
-
+-- | AST of types.
 data Type
-  = Composite CompositeConnective Components
-  | Modality ExponentialConnective Type
+  = Composite ConnectiveType (Conjunction Type)
+  | Unit ConnectiveType
+  | Modality ModalityType (Located Type)
+  | Variable Identifier
   deriving (Eq, Show)
+
+instance Pretty Type where
+  pretty = \case
+    Composite connective types ->
+      prettyASTNode
+        "Composite"
+        [ ("connective", pretty (show @Text connective)),
+          ("types", pretty types)
+        ]
+    Unit connective ->
+      prettyLabelled "Unit" $ pretty (show @Text connective)
+    Modality modality type' ->
+      prettyASTNode
+        "Modality"
+        [ ("modality", pretty (show @Text modality)),
+          ("type", pretty type')
+        ]
+    Variable identifier ->
+      prettyLabelled "Variable" $ pretty identifier
+
+-- | A typing context.
+type Context = Branches Name Type
+
+-- | Process types.
+data Sequent = Sequent
+  { sequentAntecedents :: Context,
+    sequentSuccedents :: Context
+  }
+  deriving (Eq, Show)
+
+instance Pretty Sequent where
+  pretty Sequent {..} =
+    prettyASTNode
+      "Sequent"
+      [ ("antecedents", pretty sequentAntecedents),
+        ("succedents", pretty sequentSuccedents)
+      ]

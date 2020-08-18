@@ -27,8 +27,9 @@ module Language.Pion.Parser.Monad
     items,
     conjunction,
 
-    -- * Error reporting
+    -- * Megaparsec reexports
     (<?>),
+    try,
 
     -- * Source location
     located,
@@ -47,7 +48,7 @@ import Language.Pion.Parser.Error
 import Language.Pion.SourceSpan
 import Language.Pion.Syntax.Branch
 import Language.Pion.Type
-import Text.Megaparsec ((<?>))
+import Text.Megaparsec (try, (<?>))
 import qualified Text.Megaparsec as Mega
 
 type Parser = Mega.ParsecT ParseError Token.Stream (State Mega.SourcePos)
@@ -112,7 +113,7 @@ modalityType :: Parser ModalityType
 modalityType = anyLexeme Token.ModalityType
 
 -- | Consume an unit type.
-unitType :: Parser UnitType
+unitType :: Parser ConnectiveType
 unitType = anyLexeme Token.UnitType
 
 -- | Consume a delimiter, identified by its type and whether it is
@@ -129,10 +130,18 @@ between delimType =
     (delimiter Token.Closing delimType)
 
 -- | Parse a branch from the parsers of the branch case and the branch value.
-branch :: Parser (Located c) -> Parser (Located a) -> Parser (Branch c a)
-branch caseParser valueParser = do
+branch ::
+  -- | Token between the branch case and the branch value
+  Token.Punctuation ->
+  -- | Parser for the branch case
+  Parser (Located c) ->
+  -- | Parser for the branch value
+  Parser (Located a) ->
+  -- | Resulting branch parser
+  Parser (Branch c a)
+branch assoc caseParser valueParser = do
   branchCase <- caseParser
-  punctuation Token.Colon
+  punctuation assoc
   branchValue <- valueParser
   pure Branch {..}
 
@@ -143,22 +152,33 @@ item valueParser = Branch (unknownLocation ()) <$> valueParser
 -- | Parse many branches enclosed by a delimiter and separated by a given
 -- punctuation symbol.
 branches ::
+  -- | Delimiter enclosing the branches
   Token.DelimiterType ->
+  -- | Separator between each branch
   Token.Punctuation ->
+  -- | Token between the case and value of each branch
+  Token.Punctuation ->
+  -- | Parser for the branch case
   Parser (Located c) ->
+  -- | Parser for the branch value
   Parser (Located a) ->
+  -- | Resulting parser of the list of branches
   Parser (Branches c a)
-branches delim separator caseParser valueParser =
+branches delim separator assoc caseParser valueParser =
   between delim $
-    branch caseParser valueParser
+    branch assoc caseParser valueParser
       `sepBy` separator
 
 -- | Parse many items enclosed by a delimiter and separated by a given
 -- punctuation symbol.
 items ::
+  -- | Delimiter enclosing the items
   Token.DelimiterType ->
+  -- | Separator between each item
   Token.Punctuation ->
+  -- | Value parser
   Parser (Located a) ->
+  -- | Resulting branch parser
   Parser (Branches () a)
 items delim separator valueParser =
   between delim $
@@ -167,12 +187,33 @@ items delim separator valueParser =
 
 -- | Parse a conjunction.
 conjunction ::
+  -- | Delimiter enclosing labelled conjunctions
   Token.DelimiterType ->
+  -- | Delimiter enclosing ordered conjunctions
+  Token.DelimiterType ->
+  -- | Token between the branch label and the value in the case of the
+  -- labelled conjunction
+  Token.Punctuation ->
+  -- | Parser for branch values
   Parser (Located a) ->
+  -- | Resulting conjunction
   Parser (Conjunction a)
-conjunction delim valueParser =
-  Mega.try (LabelledConjunction <$> branches delim Token.Comma (located label) valueParser)
-    <|> (OrderedConjunction <$> items delim Token.Comma valueParser)
+conjunction labelledDelim orderedDelim assoc valueParser =
+  try
+    ( LabelledConjunction
+        <$> branches
+          labelledDelim
+          assoc
+          Token.Comma
+          (located label)
+          valueParser
+    )
+    <|> ( OrderedConjunction
+            <$> items
+              orderedDelim
+              Token.Comma
+              valueParser
+        )
 
 -- | Parse a name.
 name :: Parser Name
