@@ -4,9 +4,12 @@ module Language.Pion.Parser
     runParser,
     ParseErrorBundle,
     ParseErrorRepr,
+    parseModule,
     parseProcess,
     parseExpression,
     parsePattern,
+    module',
+    declaration,
     process,
     expression,
     pattern',
@@ -15,8 +18,10 @@ where
 
 import Control.Monad.Except
 import Language.Pion.Lexer.Token (Stream)
+import Language.Pion.Parser.Declaration (declaration)
 import Language.Pion.Parser.Error
 import Language.Pion.Parser.Expression (expression)
+import Language.Pion.Parser.Module (module')
 import Language.Pion.Parser.Monad (Parser, runParser)
 import Language.Pion.Parser.Pattern (pattern')
 import Language.Pion.Parser.Process (process)
@@ -32,6 +37,13 @@ runParserReprError ::
 runParserReprError parser name stream =
   withExceptT reprParseErrorBundle $
     runParser parser name stream
+
+parseModule ::
+  Monad m =>
+  String ->
+  Stream ->
+  ExceptT ParseErrorRepr m Module
+parseModule = runParserReprError module'
 
 parseProcess ::
   Monad m =>

@@ -13,7 +13,7 @@ main = do
   result <- runExceptT do
     stream <- lex path source
     liftIO $ putDoc (pretty stream)
-    parseProcess path stream
+    parseModule path stream
   putStrLn ""
   case result of
     Right ast -> putDoc (pretty ast)

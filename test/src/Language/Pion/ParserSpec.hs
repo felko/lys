@@ -10,5 +10,5 @@ spec = do
   context "Processes" do
     testParser
       "test/passing/test.pion"
-      "should parse a process correctly"
-      process
+      "should parse a module correctly"
+      module'

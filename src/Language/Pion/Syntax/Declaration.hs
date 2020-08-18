@@ -1,6 +1,7 @@
 -- | Syntax of top level declarations.
 module Language.Pion.Syntax.Declaration
-  ( TypeDeclaration (..),
+  ( Declaration (..),
+    TypeDeclaration (..),
     ProcessDeclaration (..),
     FunctionDeclaration (..),
   )
@@ -12,6 +13,19 @@ import Language.Pion.SourceSpan
 import Language.Pion.Syntax.Expression (Expression)
 import Language.Pion.Syntax.Process (Process)
 import Language.Pion.Syntax.Type
+
+-- | AST of declarations of any kind.
+data Declaration
+  = TypeDecl TypeDeclaration
+  | ProcDecl ProcessDeclaration
+  | FuncDecl FunctionDeclaration
+  deriving (Eq, Show)
+
+instance Pretty Declaration where
+  pretty = \case
+    TypeDecl typeDecl -> pretty typeDecl
+    ProcDecl procDecl -> pretty procDecl
+    FuncDecl funcDecl -> pretty funcDecl
 
 -- |  AST of type declarations.
 data TypeDeclaration = TypeDeclaration
@@ -51,6 +65,7 @@ data FunctionDeclaration = FunctionDeclaration
     funcDeclType :: Located Type,
     funcDeclBody :: Located Expression
   }
+  deriving (Eq, Show)
 
 instance Pretty FunctionDeclaration where
   pretty FunctionDeclaration {..} =

@@ -1,3 +1,5 @@
-x → extract a;
-run jsp { x ← a, y ← b, z → c };
-result ← c 123 (1, 2, 3)
+proc test ∷ x : !Int  ⊢ result : Something {
+    x → extract a;
+    run jsp { x ← a, y ← b, z → c };
+    result ← c 123 (1, 2, 3)
+}

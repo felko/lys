@@ -1,6 +1,7 @@
 -- | Parser for type, process, and function declarations.
 module Language.Pion.Parser.Declaration
-  ( typeDeclaration,
+  ( declaration,
+    typeDeclaration,
     processDeclaration,
     functionDeclaration,
   )
@@ -13,6 +14,14 @@ import Language.Pion.Parser.Process (process)
 import Language.Pion.Parser.Type (sequent, type')
 import Language.Pion.SourceSpan
 import Language.Pion.Syntax.Declaration
+
+declaration :: Parser (Located Declaration)
+declaration =
+  locatedDecl TypeDecl typeDeclaration
+    <|> locatedDecl ProcDecl processDeclaration
+    <|> locatedDecl FuncDecl functionDeclaration
+  where
+    locatedDecl constr declParser = fmap constr <$> declParser
 
 typeDeclaration :: Parser (Located TypeDeclaration)
 typeDeclaration = located do
