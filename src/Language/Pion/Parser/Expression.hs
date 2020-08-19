@@ -17,9 +17,9 @@ import qualified Language.Pion.Parser.Literal as Literal
 import Language.Pion.Parser.Monad
 import Language.Pion.Parser.Pattern (pattern', prefixedPattern)
 import Language.Pion.SourceSpan
-import Language.Pion.Syntax.Branch
-import Language.Pion.Syntax.Expression
-import Language.Pion.Syntax.Pattern (Pattern)
+import Language.Pion.Syntax.Concrete.Branch
+import Language.Pion.Syntax.Concrete.Expression
+import Language.Pion.Syntax.Concrete.Pattern (Pattern)
 
 -- | Parse an expression.
 expression :: Parser (Located Expression)

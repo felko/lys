@@ -2,7 +2,7 @@
 module Language.Pion.Parser.Literal (literal) where
 
 import Language.Pion.Parser.Monad
-import Language.Pion.Syntax.Literal
+import Language.Pion.Syntax.Concrete.Literal
 
 -- | Parse a literal value.
 literal :: Parser Literal

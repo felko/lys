@@ -1,12 +1,12 @@
 -- | AST of expressions.
-module Language.Pion.Syntax.Expression (Expression (..)) where
+module Language.Pion.Syntax.Concrete.Expression (Expression (..)) where
 
 import Language.Pion.Name
 import Language.Pion.Pretty
 import Language.Pion.SourceSpan (Located)
-import Language.Pion.Syntax.Branch
-import Language.Pion.Syntax.Literal (Literal (..))
-import Language.Pion.Syntax.Pattern (Pattern)
+import Language.Pion.Syntax.Concrete.Branch
+import Language.Pion.Syntax.Concrete.Literal (Literal (..))
+import Language.Pion.Syntax.Concrete.Pattern (Pattern)
 
 data Expression
   = -- | Identity

@@ -1,5 +1,5 @@
 -- | Syntax of top level declarations.
-module Language.Pion.Syntax.Declaration
+module Language.Pion.Syntax.Concrete.Declaration
   ( Declaration (..),
     TypeDeclaration (..),
     ProcessDeclaration (..),
@@ -10,9 +10,9 @@ where
 import Language.Pion.Name
 import Language.Pion.Pretty
 import Language.Pion.SourceSpan
-import Language.Pion.Syntax.Expression (Expression)
-import Language.Pion.Syntax.Process (Process)
-import Language.Pion.Syntax.Type
+import Language.Pion.Syntax.Concrete.Expression (Expression)
+import Language.Pion.Syntax.Concrete.Process (Process)
+import Language.Pion.Syntax.Concrete.Type
 
 -- | AST of declarations of any kind.
 data Declaration

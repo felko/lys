@@ -1,12 +1,12 @@
 -- | Syntax of modules.
-module Language.Pion.Syntax.Module
+module Language.Pion.Syntax.Concrete.Module
   ( Module (..),
   )
 where
 
 import Language.Pion.Pretty
 import Language.Pion.SourceSpan
-import Language.Pion.Syntax.Declaration (Declaration)
+import Language.Pion.Syntax.Concrete.Declaration (Declaration)
 
 data Module = Module
   { moduleDecls :: [Located Declaration]

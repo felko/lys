@@ -18,8 +18,8 @@ import Language.Pion.Parser.Expression (expression)
 import Language.Pion.Parser.Monad
 import Language.Pion.Parser.Pattern (pattern')
 import Language.Pion.SourceSpan
-import Language.Pion.Syntax.Branch
-import Language.Pion.Syntax.Process
+import Language.Pion.Syntax.Concrete.Branch
+import Language.Pion.Syntax.Concrete.Process
 import qualified Text.Megaparsec as Mega
 import Prelude hiding (join)
 

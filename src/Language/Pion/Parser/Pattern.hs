@@ -14,7 +14,7 @@ where
 import qualified Language.Pion.Lexer.Token as Token
 import Language.Pion.Parser.Monad
 import Language.Pion.SourceSpan
-import Language.Pion.Syntax.Pattern
+import Language.Pion.Syntax.Concrete.Pattern
 import Prelude hiding (drop)
 
 -- | Parse a pattern.

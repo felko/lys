@@ -46,7 +46,7 @@ import qualified Language.Pion.Lexer.Token as Token
 import Language.Pion.Name
 import Language.Pion.Parser.Error
 import Language.Pion.SourceSpan
-import Language.Pion.Syntax.Branch
+import Language.Pion.Syntax.Concrete.Branch
 import Language.Pion.Type
 import Text.Megaparsec (try, (<?>))
 import qualified Text.Megaparsec as Mega

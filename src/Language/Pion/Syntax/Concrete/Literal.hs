@@ -1,5 +1,5 @@
 -- | Syntax of literals
-module Language.Pion.Syntax.Literal (Literal (..)) where
+module Language.Pion.Syntax.Concrete.Literal (Literal (..)) where
 
 import Language.Pion.Pretty
 

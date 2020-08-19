@@ -1,5 +1,5 @@
 -- | Syntax of types.
-module Language.Pion.Syntax.Type
+module Language.Pion.Syntax.Concrete.Type
   ( Type(..),
     Context,
     Sequent(..),
@@ -9,7 +9,7 @@ where
 import Language.Pion.Name
 import Language.Pion.Pretty
 import Language.Pion.SourceSpan
-import Language.Pion.Syntax.Branch
+import Language.Pion.Syntax.Concrete.Branch
 import Language.Pion.Type
 
 -- | AST of types.

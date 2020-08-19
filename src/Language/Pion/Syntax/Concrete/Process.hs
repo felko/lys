@@ -1,5 +1,5 @@
 -- | Syntax of processes
-module Language.Pion.Syntax.Process
+module Language.Pion.Syntax.Concrete.Process
   ( Side (..),
     PortMap,
     Action (..),
@@ -10,9 +10,9 @@ where
 import Language.Pion.Name
 import Language.Pion.Pretty
 import Language.Pion.SourceSpan
-import Language.Pion.Syntax.Branch
-import Language.Pion.Syntax.Expression (Expression)
-import Language.Pion.Syntax.Pattern (Pattern)
+import Language.Pion.Syntax.Concrete.Branch
+import Language.Pion.Syntax.Concrete.Expression (Expression)
+import Language.Pion.Syntax.Concrete.Pattern (Pattern)
 
 data Side = LeftSide | RightSide
   deriving (Eq, Ord, Show)

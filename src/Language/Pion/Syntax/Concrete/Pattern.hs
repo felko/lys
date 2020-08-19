@@ -1,10 +1,10 @@
--- | Syntax of patterns
-module Language.Pion.Syntax.Pattern (Pattern (..)) where
+-- | Syntax of patterns.
+module Language.Pion.Syntax.Concrete.Pattern (Pattern (..)) where
 
 import Language.Pion.Name
 import Language.Pion.Pretty
 import Language.Pion.SourceSpan
-import Language.Pion.Syntax.Branch
+import Language.Pion.Syntax.Concrete.Branch
 
 data Pattern
   = -- | Identity

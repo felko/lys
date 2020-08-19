@@ -13,7 +13,7 @@ import Language.Pion.Parser.Monad
 import Language.Pion.Parser.Process (process)
 import Language.Pion.Parser.Type (sequent, type')
 import Language.Pion.SourceSpan
-import Language.Pion.Syntax.Declaration
+import Language.Pion.Syntax.Concrete.Declaration
 
 -- | Parse any kind of declaration.
 declaration :: Parser (Located Declaration)

@@ -1,5 +1,5 @@
 -- | AST of branches.
-module Language.Pion.Syntax.Branch
+module Language.Pion.Syntax.Concrete.Branch
   ( Branch (..),
     Branches,
     Conjunction (..),

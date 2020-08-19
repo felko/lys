@@ -12,7 +12,7 @@ where
 import qualified Language.Pion.Lexer.Token as Token
 import Language.Pion.Parser.Monad
 import Language.Pion.SourceSpan
-import Language.Pion.Syntax.Type
+import Language.Pion.Syntax.Concrete.Type
 
 -- | Parse a type.
 type' :: Parser (Located Type)

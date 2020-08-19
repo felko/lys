@@ -26,7 +26,7 @@ import Language.Pion.Parser.Monad (Parser, runParser)
 import Language.Pion.Parser.Pattern (pattern')
 import Language.Pion.Parser.Process (process)
 import Language.Pion.SourceSpan (Located)
-import Language.Pion.Syntax
+import Language.Pion.Syntax.Concrete
 
 runParserReprError ::
   Monad m =>
