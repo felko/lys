@@ -49,13 +49,7 @@ import Language.Pion.Pretty
 import Language.Pion.SourceSpan
 import Language.Pion.Type
 import qualified Text.Megaparsec as Mega
-import Text.Show
-  ( ShowS,
-    showChar,
-    showParen,
-    showString,
-    showsPrec,
-  )
+import Text.Show (ShowS, showParen, showString)
 
 -- | Delimiter type.
 data DelimiterType
@@ -260,12 +254,12 @@ instance GCompare Token where
 
 instance GShow Token where
   gshowsPrec p Token {..} = case tokenLexeme of
-    Keyword kw -> showTokenWith ()
-    ConnectiveType c -> showTokenWith ()
-    ModalityType m -> showTokenWith ()
-    UnitType u -> showTokenWith ()
-    Delimiter delim delimType -> showTokenWith ()
-    Punctuation p -> showTokenWith ()
+    Keyword {} -> showTokenWith ()
+    ConnectiveType {} -> showTokenWith ()
+    ModalityType {} -> showTokenWith ()
+    UnitType {} -> showTokenWith ()
+    Delimiter {} -> showTokenWith ()
+    Punctuation {} -> showTokenWith ()
     Identifier -> showTokenWith tokenData
     IntegerLiteral -> showTokenWith tokenData
     FloatLiteral -> showTokenWith tokenData
@@ -280,14 +274,15 @@ instance GShow Token where
           . showFields fields
       showTokenWith :: forall a. Show a => a -> ShowS
       showTokenWith value =
-        showString "Token "
-          . showString "{ "
-          . showFields
-            [ ("tokenLexeme", show tokenLexeme),
-              ("tokenLength", show tokenLength),
-              ("tokenData", show value)
-            ]
-          . showString " }"
+        showParen (p > 11) $
+          showString "Token "
+            . showString "{ "
+            . showFields
+              [ ("tokenLexeme", show tokenLexeme),
+                ("tokenLength", show tokenLength),
+                ("tokenData", show value)
+              ]
+            . showString " }"
 
 instance Pretty (Token a) where
   pretty :: forall ann. Token a -> Doc ann

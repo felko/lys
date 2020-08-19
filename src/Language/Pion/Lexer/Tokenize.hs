@@ -20,7 +20,6 @@ import Language.Pion.Lexer.Monad
 import Language.Pion.Lexer.Token
 import Language.Pion.SourceSpan
 import Language.Pion.Type
-import Relude.Debug
 import qualified Text.Megaparsec as Mega
 import qualified Text.Megaparsec.Char as Mega.Char
 import qualified Text.Megaparsec.Char.Lexer as Mega.Lexer
@@ -112,7 +111,7 @@ allLexemes =
 
 -- | Consume any valid token.
 anyToken :: Lexer SomeLocatedToken
-anyToken = Mega.choice (someToken <$> allLexemes) >>= \jsp -> traceShow jsp $ pure jsp
+anyToken = Mega.choice (someToken <$> allLexemes)
 
 -- | Tokenize the input source into a stream.
 tokenize :: Lexer Stream
