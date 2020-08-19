@@ -20,6 +20,7 @@ import Language.Pion.Lexer.Monad
 import Language.Pion.Lexer.Token
 import Language.Pion.SourceSpan
 import Language.Pion.Type
+import Relude.Debug
 import qualified Text.Megaparsec as Mega
 import qualified Text.Megaparsec.Char as Mega.Char
 import qualified Text.Megaparsec.Char.Lexer as Mega.Lexer
@@ -76,10 +77,9 @@ lexeme l = case l of
 token :: Lexeme a -> Lexer (LocatedToken a)
 token tokenLexeme = do
   startOffset <- getOffset
-  Located {locNode = tokenData, locSpan} <-
+  (Located {locNode = tokenData, locSpan}, endOffset) <-
     skipTrailingSpaces $
-      located (lexeme tokenLexeme)
-  endOffset <- getOffset
+      (,) <$> located (lexeme tokenLexeme) <*> getOffset
   let tokenLength = endOffset - startOffset
   pure . Compose $ Located {locNode = Token {..}, locSpan}
   where
@@ -112,7 +112,7 @@ allLexemes =
 
 -- | Consume any valid token.
 anyToken :: Lexer SomeLocatedToken
-anyToken = Mega.choice (someToken <$> allLexemes)
+anyToken = Mega.choice (someToken <$> allLexemes) >>= \jsp -> traceShow jsp $ pure jsp
 
 -- | Tokenize the input source into a stream.
 tokenize :: Lexer Stream

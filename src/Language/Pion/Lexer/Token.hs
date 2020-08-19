@@ -44,12 +44,18 @@ import Data.Semigroup (option)
 import Data.Some
 import qualified Data.Text.Lazy as LText (drop, splitAt, takeWhile)
 import Data.Type.Equality
-import GHC.Show (showChar, showParen, showString, showsPrec)
 import Language.Pion.Orphans ()
 import Language.Pion.Pretty
 import Language.Pion.SourceSpan
 import Language.Pion.Type
 import qualified Text.Megaparsec as Mega
+import Text.Show
+  ( ShowS,
+    showChar,
+    showParen,
+    showString,
+    showsPrec,
+  )
 
 -- | Delimiter type.
 data DelimiterType
@@ -253,53 +259,35 @@ instance GCompare Token where
         GT -> GGT
 
 instance GShow Token where
-  gshowsPrec p (Token l _ d) = case l of
-    Keyword kw ->
-      showParen (p > 10) $
-        showString "Keyword "
-          . showsPrec 11 kw
-    ConnectiveType c ->
-      showParen (p > 10) $
-        showString "ConnectiveType "
-          . showsPrec 11 c
-    ModalityType m ->
-      showParen (p > 10) $
-        showString "ModalityType "
-          . showsPrec 11 m
-    UnitType u ->
-      showParen (p > 10) $
-        showString "UnitType "
-          . showsPrec 11 u
-    Delimiter delim delimType ->
-      showParen (p > 10) $
-        showString "Delimiter "
-          . showsPrec 11 delim
-          . showChar ' '
-          . showsPrec 11 delimType
-    Punctuation pt ->
-      showParen (p > 10) $
-        showString "Pu@nctuation "
-          . showsPrec 11 pt
-    Identifier ->
-      showParen (p > 10) $
-        showString "Identifier "
-          . showsPrec 11 d
-    IntegerLiteral ->
-      showParen (p > 10) $
-        showString "IntegerLiteral "
-          . showsPrec 11 d
-    FloatLiteral ->
-      showParen (p > 10) $
-        showString "FloatLiteral "
-          . showsPrec 11 d
-    CharLiteral ->
-      showParen (p > 10) $
-        showString "CharLiteral "
-          . showsPrec 11 d
-    StringLiteral ->
-      showParen (p > 10) $
-        showString "StringLiteral "
-          . showsPrec 11 d
+  gshowsPrec p Token {..} = case tokenLexeme of
+    Keyword kw -> showTokenWith ()
+    ConnectiveType c -> showTokenWith ()
+    ModalityType m -> showTokenWith ()
+    UnitType u -> showTokenWith ()
+    Delimiter delim delimType -> showTokenWith ()
+    Punctuation p -> showTokenWith ()
+    Identifier -> showTokenWith tokenData
+    IntegerLiteral -> showTokenWith tokenData
+    FloatLiteral -> showTokenWith tokenData
+    CharLiteral -> showTokenWith tokenData
+    StringLiteral -> showTokenWith tokenData
+    where
+      showFields [] = const ""
+      showFields [(field, value)] =
+        showString (field ++ " = " ++ value)
+      showFields ((field, value) : fields) =
+        showString (field ++ " = " ++ value ++ ", ")
+          . showFields fields
+      showTokenWith :: forall a. Show a => a -> ShowS
+      showTokenWith value =
+        showString "Token "
+          . showString "{ "
+          . showFields
+            [ ("tokenLexeme", show tokenLexeme),
+              ("tokenLength", show tokenLength),
+              ("tokenData", show value)
+            ]
+          . showString " }"
 
 instance Pretty (Token a) where
   pretty :: forall ann. Token a -> Doc ann

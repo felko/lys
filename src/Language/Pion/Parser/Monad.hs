@@ -199,12 +199,13 @@ conjunction ::
   -- | Resulting conjunction
   Parser (Conjunction a)
 conjunction labelledDelim orderedDelim assoc valueParser =
-  try
+  -- If the delimiters are distinct then we don't need to backtrack
+  tryIfSameDelimiters
     ( LabelledConjunction
         <$> branches
           labelledDelim
-          assoc
           Token.Comma
+          assoc
           (located label)
           valueParser
     )
@@ -214,6 +215,10 @@ conjunction labelledDelim orderedDelim assoc valueParser =
               Token.Comma
               valueParser
         )
+  where
+    tryIfSameDelimiters
+      | labelledDelim == orderedDelim = try
+      | otherwise = id
 
 -- | Parse a name.
 name :: Parser Name
