@@ -15,6 +15,7 @@ import Language.Pion.Parser.Type (sequent, type')
 import Language.Pion.SourceSpan
 import Language.Pion.Syntax.Declaration
 
+-- | Parse any kind of declaration.
 declaration :: Parser (Located Declaration)
 declaration =
   locatedDecl TypeDecl typeDeclaration
@@ -23,6 +24,7 @@ declaration =
   where
     locatedDecl constr declParser = fmap constr <$> declParser
 
+-- | Parse a type declaration.
 typeDeclaration :: Parser (Located TypeDeclaration)
 typeDeclaration = located do
   keyword Token.Type
@@ -31,20 +33,22 @@ typeDeclaration = located do
   typeDeclType <- type'
   pure TypeDeclaration {..}
 
+-- | Parse a process declaration
 processDeclaration :: Parser (Located ProcessDeclaration)
 processDeclaration = located do
   keyword Token.Proc
   procDeclName <- located identifier
   punctuation Token.DoubleColon
   procDeclType <- sequent
-  procDeclBody <- between Token.Brace process
+  procDeclBody <- process
   pure ProcessDeclaration {..}
 
+-- | Parse a function declaration.
 functionDeclaration :: Parser (Located FunctionDeclaration)
 functionDeclaration = located do
   keyword Token.Func
   funcDeclName <- located identifier
   punctuation Token.Colon
   funcDeclType <- type'
-  funcDeclBody <- between Token.Brace expression
+  funcDeclBody <- expression
   pure FunctionDeclaration {..}
