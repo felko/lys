@@ -1,15 +1,13 @@
 {-# LANGUAGE TypeApplications #-}
 
--- Concrete syntax.
-
-module Language.Pion.Syntax.Concrete
+-- | Abstract syntax.
+module Language.Pion.Syntax.Abstract
   ( Type (..),
     Context,
     Sequent (..),
     Literal (..),
     Expression (..),
     Pattern (..),
-    Action (..),
     Process (..),
     TypeDeclaration (..),
     ProcessDeclaration (..),
@@ -26,58 +24,14 @@ import Language.Pion.Name
 import Language.Pion.Pretty
 import Language.Pion.SourceSpan
 import Language.Pion.Syntax.Common
+import Language.Pion.Syntax.Core (Context, Sequent (..), Type (..))
 import Language.Pion.Type
-
--- | Concrete syntax tree of types.
-data Type
-  = ConnT ConnectiveType (Conjunction Type)
-  | UnitT ConnectiveType
-  | ExpT ModalityType (Located Type)
-  | VarT Identifier
-  deriving (Eq, Show)
-
-instance Pretty Type where
-  pretty = \case
-    ConnT connective types ->
-      prettySyntaxNode
-        "Conn"
-        [ ("connective", pretty (show @Text connective)),
-          ("types", pretty types)
-        ]
-    UnitT connective ->
-      prettyLabelled "Unit" $ pretty (show @Text connective)
-    ExpT modality type' ->
-      prettySyntaxNode
-        "Exp"
-        [ ("modality", pretty (show @Text modality)),
-          ("type", pretty type')
-        ]
-    VarT identifier ->
-      prettyLabelled "Var" $ pretty identifier
-
--- | A typing context.
-type Context = Branches Name Type
-
--- | Process types.
-data Sequent = Sequent
-  { sequentAntecedents :: Context,
-    sequentSuccedents :: Context
-  }
-  deriving (Eq, Show)
-
-instance Pretty Sequent where
-  pretty Sequent {..} =
-    prettySyntaxNode
-      "Sequent"
-      [ ("antecedents", pretty sequentAntecedents),
-        ("succedents", pretty sequentSuccedents)
-      ]
 
 data Pattern
   = -- | Identity
     VarP Name
   | -- | Elimination of "tensor"
-    SplitP (Conjunction Pattern)
+    SplitP (Branches Name Pattern)
   | -- | Elimination of "with"
     SelectP (Located Name) (Located Pattern)
   | -- | Dereliction of "of course"
@@ -117,9 +71,9 @@ data Expression
   | -- | A literal value
     LitE Literal
   | -- | Introduction of "tensor"
-    TupleE (Conjunction Expression)
+    TupleE (Branches Name Expression)
   | -- | Introduction of "with"
-    AltE (Conjunction Expression)
+    AltE (Branches Name Expression)
   | -- | Elimination of "plus"
     MatchE (Located Expression) (Branches Pattern Expression)
   | -- | Let-binding
@@ -152,7 +106,7 @@ instance Pretty Expression where
             CharL {} -> "char"
             StringL {} -> "string"
        in prettySyntaxNode
-            "Lit"
+            "Literal"
             [ ("type", litType),
               ("value", pretty lit)
             ]
@@ -173,76 +127,69 @@ instance Pretty Expression where
           ("body", pretty body)
         ]
 
-data Action
+data Process
   = -- | p → x; P
-    InputA (Located Name) (Located Pattern)
+    Input (Located Name) (Located Pattern) Process
   | -- | P; x ← e
-    OutputA (Located Name) (Located Expression)
+    Output Process (Located Name) (Located Expression)
   | -- | run p { x ← a, y → b }
-    RunA (Located Identifier) PortMap
+    Run (Located Identifier) PortMap
   | -- | join z { x : P | y : Q }
-    JoinA (Located Name) (Branches Name Process)
+    Join (Located Name) (Branches Name Process)
   | -- | fork z { x : P | y : Q }
-    ForkA (Located Name) (Branches Name Process)
+    Fork (Located Name) (Branches Name Process)
   | -- | alt z { x : P | y : Q }
-    AltA (Located Name) (Branches Label Process)
+    Alt (Located Name) (Branches Label Process)
   | -- | match z { x : P | y : Q }
-    MatchA (Located Name) (Branches Label Process)
+    Match (Located Name) (Branches Label Process)
   deriving (Eq, Ord, Show)
 
-instance Pretty Action where
+instance Pretty Process where
   pretty = \case
-    InputA name pat ->
+    Input name pat post ->
       prettySyntaxNode
         "Input"
         [ ("name", pretty name),
-          ("pattern", pretty pat)
+          ("pattern", pretty pat),
+          ("post", pretty post)
         ]
-    OutputA name expr ->
+    Output pre name expr ->
       prettySyntaxNode
         "Output"
-        [ ("name", pretty name),
+        [ ("pre", pretty pre),
+          ("name", pretty name),
           ("expression", pretty expr)
         ]
-    RunA ident ports ->
+    Run ident ports ->
       prettySyntaxNode
         "Run"
         [ ("ident", pretty ident),
           ("ports", pretty ports)
         ]
-    JoinA name procs ->
+    Join name procs ->
       prettySyntaxNode
         "Join"
         [ ("name", pretty name),
           ("processes", pretty procs)
         ]
-    ForkA name procs ->
+    Fork name procs ->
       prettySyntaxNode
         "Fork"
         [ ("name", pretty name),
           ("processes", pretty procs)
         ]
-    AltA name procs ->
+    Alt name procs ->
       prettySyntaxNode
         "Alt"
         [ ("name", pretty name),
           ("processes", pretty procs)
         ]
-    MatchA name procs ->
+    Match name procs ->
       prettySyntaxNode
         "Match"
         [ ("name", pretty name),
           ("processes", pretty procs)
         ]
-
-data Process = Process
-  {procActions :: [Located Action]}
-  deriving (Eq, Ord, Show)
-
-instance Pretty Process where
-  pretty Process {..} =
-    prettyLabelled "Process" $
-      prettySyntaxList (fmap pretty procActions)
 
 -- |  AST of type declarations.
 data TypeDeclaration = TypeDeclaration

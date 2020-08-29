@@ -13,9 +13,9 @@ module Language.Pion.Pretty
 
     -- * AST pretty printing
     prettyLabelled,
-    prettyField,
-    prettyASTNode,
-    prettyASTList,
+    prettySyntaxField,
+    prettySyntaxNode,
+    prettySyntaxList,
   )
 where
 
@@ -44,24 +44,24 @@ prettyStringLiteral str = pretty (show @Text str)
 prettyLabelled :: Doc ann -> Doc ann -> Doc ann
 prettyLabelled label labelled = group $ label <+> labelled
 
--- | Pretty print an AST field.
-prettyField :: Doc ann -> Doc ann -> Doc ann
-prettyField name value = name <> colon <+> value
+-- | Pretty print a field of a syntax tree node.
+prettySyntaxField :: Doc ann -> Doc ann -> Doc ann
+prettySyntaxField name value = name <> colon <+> value
 
--- | Pretty print an AST node, given its label and fields.
-prettyASTNode :: Doc ann -> [(Doc ann, Doc ann)] -> Doc ann
-prettyASTNode label fields =
+-- | Pretty print a syntax node, given its label and fields.
+prettySyntaxNode :: Doc ann -> [(Doc ann, Doc ann)] -> Doc ann
+prettySyntaxNode label fields =
   prettyLabelled label $
     nest 2 (line <> align (encloseSep open close separator prettyFields))
   where
     open = flatAlt "" "{ "
     close = flatAlt "" " }"
     separator = flatAlt "" ", "
-    prettyFields = fmap (uncurry prettyField) fields
+    prettyFields = fmap (uncurry prettySyntaxField) fields
 
--- | Pretty print a bulleted list.
-prettyASTList :: [Doc ann] -> Doc ann
-prettyASTList elements =
+-- | Pretty print a bulleted list in a syntax tree.
+prettySyntaxList :: [Doc ann] -> Doc ann
+prettySyntaxList elements =
   group $ nest 2 (line <> align (encloseSep open close separator bulletedList))
   where
     open = flatAlt "" "[ "

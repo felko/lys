@@ -6,7 +6,7 @@ module Utils
 where
 
 import Language.Pion.Lexer
-import Language.Pion.Parser
+import Language.Pion.Parser.Monad
 import Test.Hspec
 import qualified Test.Hspec.Megaparsec as Mega
 import qualified Text.Megaparsec as Mega

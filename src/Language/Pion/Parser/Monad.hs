@@ -46,7 +46,7 @@ import qualified Language.Pion.Lexer.Token as Token
 import Language.Pion.Name
 import Language.Pion.Parser.Error
 import Language.Pion.SourceSpan
-import Language.Pion.Syntax.Concrete.Branch
+import Language.Pion.Syntax.Common
 import Language.Pion.Type
 import Text.Megaparsec (try, (<?>))
 import qualified Text.Megaparsec as Mega
@@ -165,7 +165,7 @@ branches ::
   -- | Resulting parser of the list of branches
   Parser (Branches c a)
 branches delim separator assoc caseParser valueParser =
-  between delim $
+  fmap Branches . between delim $
     branch assoc caseParser valueParser
       `sepBy` separator
 
@@ -181,7 +181,7 @@ items ::
   -- | Resulting branch parser
   Parser (Branches () a)
 items delim separator valueParser =
-  between delim $
+  fmap Branches . between delim $
     item valueParser
       `sepBy` separator
 
@@ -206,7 +206,7 @@ conjunction labelledDelim orderedDelim assoc valueParser =
           labelledDelim
           Token.Comma
           assoc
-          (located label)
+          (located name)
           valueParser
     )
     <|> ( OrderedConjunction
@@ -252,12 +252,3 @@ stringLiteral = lexeme Token.StringLiteral
 -- by the punctuation symbol @sep@.
 sepBy :: Parser a -> Token.Punctuation -> Parser [a]
 sepBy p sep = p `Mega.sepBy` punctuation sep
-
--- -- | @p `sepByOneOf` seps@ parses many occurences of @p@ separated by one
--- -- of the separators in @sep@. When encountering the first separator,
--- -- it is fed to a function that takes the separator and the list of
--- -- items that were parsed. This avoids backtracking after the first item
--- -- when the separator is not the expected one.
--- sepByOneOf :: Parser Punctuation -> (Punctuation -> [a] -> b) -> Parser a -> Parser b
--- sepByOneOf seps gather itemParser =
---   item

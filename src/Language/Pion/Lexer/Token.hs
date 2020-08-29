@@ -1,5 +1,4 @@
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- | Type of tokens and lexemes
@@ -88,7 +87,7 @@ data Keyword
   | Import
   | Extract
   | Unwrap
-  | Alternative
+  | Alt
   | Fork
   | Match
   | Split
@@ -113,7 +112,7 @@ keywordText = \case
   Import -> "import"
   Extract -> "extract"
   Unwrap -> "unwrap"
-  Alternative -> "alternative"
+  Alt -> "alt"
   Fork -> "fork"
   Match -> "match"
   Split -> "split"

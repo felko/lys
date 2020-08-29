@@ -16,3 +16,11 @@ extra-deps:
   - QuickCheck-2.14.1
   - random-1.2.0
   - splitmix-0.1.0.1
+  - these-1.1.1.1
+  - semialign-1.1.0.1
+
+flags:
+  these:
+    assoc: false
+  semialign:
+    semigroupoids: false

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 7803aaa0de31b2d96f52d8a76b7f60b2d9c878f6974ab9127864fd2735ce5250
+-- hash: b5a373de80b0dd03261a13bd639dad1b63a46dd082c923973aef9851e69a66a0
 
 name:           pion
 version:        0.0.1.0
@@ -37,49 +37,44 @@ library
       Language.Pion.Name
       Language.Pion.Orphans
       Language.Pion.Parser
-      Language.Pion.Parser.Declaration
       Language.Pion.Parser.Error
-      Language.Pion.Parser.Expression
-      Language.Pion.Parser.Literal
-      Language.Pion.Parser.Module
       Language.Pion.Parser.Monad
-      Language.Pion.Parser.Pattern
-      Language.Pion.Parser.Process
-      Language.Pion.Parser.Type
+      Language.Pion.Pass.Desugar
+      Language.Pion.Pass.Parsing
       Language.Pion.Pretty
       Language.Pion.SourceSpan
       Language.Pion.Syntax
+      Language.Pion.Syntax.Abstract
+      Language.Pion.Syntax.Common
       Language.Pion.Syntax.Concrete
-      Language.Pion.Syntax.Concrete.Branch
-      Language.Pion.Syntax.Concrete.Declaration
-      Language.Pion.Syntax.Concrete.Expression
-      Language.Pion.Syntax.Concrete.Literal
-      Language.Pion.Syntax.Concrete.Module
-      Language.Pion.Syntax.Concrete.Pattern
-      Language.Pion.Syntax.Concrete.Process
-      Language.Pion.Syntax.Concrete.Type
+      Language.Pion.Syntax.Core
       Language.Pion.Type
       Prelude
   other-modules:
       Paths_pion
   hs-source-dirs:
       src
-  default-extensions: LambdaCase BlockArguments TupleSections BangPatterns PatternSynonyms RecordWildCards NamedFieldPuns GeneralizedNewtypeDeriving StandaloneDeriving DerivingStrategies DerivingVia DeriveGeneric DeriveFunctor DeriveFoldable DeriveTraversable FlexibleInstances InstanceSigs FlexibleContexts RankNTypes ScopedTypeVariables TypeApplications GADTs OverloadedStrings
+  default-extensions: LambdaCase BlockArguments TupleSections BangPatterns PatternSynonyms RecordWildCards NamedFieldPuns GeneralizedNewtypeDeriving StandaloneDeriving DerivingStrategies DerivingVia DeriveGeneric DeriveFunctor DeriveFoldable DeriveTraversable DeriveAnyClass FlexibleInstances InstanceSigs FlexibleContexts RankNTypes ScopedTypeVariables TypeApplications GADTs OverloadedStrings
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wtabs
   build-depends:
       base-noprelude >=4.7 && <5
+    , bifunctors
     , containers
     , dependent-sum
     , dependent-sum-template
     , generic-data
     , megaparsec
+    , microlens-platform
     , mtl
     , prettyprinter
     , prettyprinter-ansi-terminal
     , relude
     , rock
+    , semialign
+    , semialign-optics
     , some
     , text
+    , these
     , unordered-containers
     , vector
   default-language: Haskell2010
@@ -90,23 +85,28 @@ executable pion
       Paths_pion
   hs-source-dirs:
       app
-  default-extensions: LambdaCase BlockArguments TupleSections BangPatterns PatternSynonyms RecordWildCards NamedFieldPuns GeneralizedNewtypeDeriving StandaloneDeriving DerivingStrategies DerivingVia DeriveGeneric DeriveFunctor DeriveFoldable DeriveTraversable FlexibleInstances InstanceSigs FlexibleContexts RankNTypes ScopedTypeVariables TypeApplications GADTs OverloadedStrings
+  default-extensions: LambdaCase BlockArguments TupleSections BangPatterns PatternSynonyms RecordWildCards NamedFieldPuns GeneralizedNewtypeDeriving StandaloneDeriving DerivingStrategies DerivingVia DeriveGeneric DeriveFunctor DeriveFoldable DeriveTraversable DeriveAnyClass FlexibleInstances InstanceSigs FlexibleContexts RankNTypes ScopedTypeVariables TypeApplications GADTs OverloadedStrings
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wtabs -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base-noprelude >=4.7 && <5
+    , bifunctors
     , containers
     , dependent-sum
     , dependent-sum-template
     , generic-data
     , megaparsec
+    , microlens-platform
     , mtl
     , pion
     , prettyprinter
     , prettyprinter-ansi-terminal
     , relude
     , rock
+    , semialign
+    , semialign-optics
     , some
     , text
+    , these
     , unordered-containers
     , vector
   default-language: Haskell2010
@@ -121,11 +121,12 @@ test-suite pion-test
       Paths_pion
   hs-source-dirs:
       test/src
-  default-extensions: LambdaCase BlockArguments TupleSections BangPatterns PatternSynonyms RecordWildCards NamedFieldPuns GeneralizedNewtypeDeriving StandaloneDeriving DerivingStrategies DerivingVia DeriveGeneric DeriveFunctor DeriveFoldable DeriveTraversable FlexibleInstances InstanceSigs FlexibleContexts RankNTypes ScopedTypeVariables TypeApplications GADTs OverloadedStrings
+  default-extensions: LambdaCase BlockArguments TupleSections BangPatterns PatternSynonyms RecordWildCards NamedFieldPuns GeneralizedNewtypeDeriving StandaloneDeriving DerivingStrategies DerivingVia DeriveGeneric DeriveFunctor DeriveFoldable DeriveTraversable DeriveAnyClass FlexibleInstances InstanceSigs FlexibleContexts RankNTypes ScopedTypeVariables TypeApplications GADTs OverloadedStrings
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wtabs -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       QuickCheck
     , base-noprelude >=4.7 && <5
+    , bifunctors
     , containers
     , dependent-sum
     , dependent-sum-template
@@ -133,14 +134,18 @@ test-suite pion-test
     , hspec
     , hspec-megaparsec
     , megaparsec
+    , microlens-platform
     , mtl
     , pion
     , prettyprinter
     , prettyprinter-ansi-terminal
     , relude
     , rock
+    , semialign
+    , semialign-optics
     , some
     , text
+    , these
     , unordered-containers
     , vector
   default-language: Haskell2010

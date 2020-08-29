@@ -12,6 +12,7 @@ where
 import Data.Functor.Classes
 import GHC.Generics
 import Generic.Data (Generically1 (..))
+import Language.Pion.Orphans ()
 import Prettyprinter
 import qualified Text.Megaparsec.Pos as Mega
 
@@ -21,6 +22,7 @@ data SourceSpan = SourceSpan
     spanEnd :: !Mega.SourcePos
   }
   deriving (Eq, Ord, Show)
+  deriving (Generic, Hashable)
 
 instance Semigroup SourceSpan where
   SourceSpan start end <> SourceSpan start' end' =
@@ -32,7 +34,7 @@ data Located a = Located
     locSpan :: !(Option SourceSpan)
   }
   deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
-  deriving (Generic1)
+  deriving (Generic, Generic1, Hashable)
   deriving (Show1) via (Generically1 Located)
 
 unknownLocation :: a -> Located a

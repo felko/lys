@@ -1,7 +1,7 @@
 -- | Test suite for the parser.
 module Language.Pion.ParserSpec (spec) where
 
-import Language.Pion.Parser
+import qualified Language.Pion.Parser as Parser
 import Test.Hspec
 import Utils
 
@@ -11,4 +11,4 @@ spec = do
     testParser
       "test/passing/test.pion"
       "should parse a module correctly"
-      module'
+      Parser.module'

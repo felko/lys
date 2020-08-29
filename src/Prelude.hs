@@ -11,7 +11,8 @@ where
 
 import Control.Category
 import Relude hiding
-  ( State,
+  ( Alt (..),
+    State,
     Type,
     evalState,
     execState,

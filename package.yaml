@@ -22,10 +22,14 @@ dependencies:
   # Types
   - some
   - dependent-sum
+  - bifunctors
   - text
   - vector
   - containers
   - unordered-containers
+  - these
+  - semialign
+  - semialign-optics
 
   # Generics
   - dependent-sum-template
@@ -38,6 +42,7 @@ dependencies:
 
   # Other dependencies
   - mtl
+  - microlens-platform
   - rock
 
 default-extensions:
@@ -63,6 +68,7 @@ default-extensions:
   - DeriveFunctor
   - DeriveFoldable
   - DeriveTraversable
+  - DeriveAnyClass
 
   # Instance
   - FlexibleInstances
